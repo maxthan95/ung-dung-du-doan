@@ -83,7 +83,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
     const [isCapturing, setIsCapturing] = useState(false);
     const [stream, setStream] = useState(null);
     
-    const [setupStep, setSetupStep] = useState('idle');
+    const [setupStep, setSetupStep] = useState('idle'); // idle, drawingLatest, drawingHistory, complete
     const [tempRegion, setTempRegion] = useState(null);
     const [isDragging, setIsDragging] = useState(false);
     const [regions, setRegions] = useState(() => {
@@ -112,11 +112,10 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
             setStream(mediaStream);
             if (videoRef.current) videoRef.current.srcObject = mediaStream;
             setIsCapturing(true);
-            // If regions are already saved, go to complete, otherwise start setup
             if (regions.latest && regions.history) {
                 setSetupStep('complete');
             } else {
-                setSetupStep('drawingLatest');
+                setSetupStep('start');
             }
         } catch (err) { alert("Không thể bắt đầu ghi hình. Vui lòng cấp quyền."); }
     };
@@ -124,11 +123,6 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
     const stopCapture = () => {
         if (stream) stream.getTracks().forEach(track => track.stop());
         setStream(null); setIsCapturing(false); setLastResult(null); setSetupStep('idle');
-    };
-
-    const resetSetup = () => {
-        setRegions({ latest: null, history: null });
-        setSetupStep('drawingLatest');
     };
 
     const handleMouseDown = (e) => {
@@ -191,12 +185,10 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                     setLastResult(currentResult);
                     if (lastResult !== null) {
                         const h = regions.history;
-                        const historyImageData = ctx.getImageData((h.x / 100) * canvas.width, (h.y / 100) * canvas.height, (h.width / 100) * canvas.width, (h.height / 100) * canvas.height);
-                        
                         const historyResults = [];
-                        const itemWidth = historyImageData.width / 15;
+                        const itemWidth = ((h.width / 100) * canvas.width) / 15;
                         for (let i = 0; i < 15; i++) {
-                            const itemImageData = ctx.getImageData((h.x / 100) * canvas.width + i * itemWidth, (h.y / 100) * canvas.height, itemWidth, h.height / 100 * canvas.height);
+                            const itemImageData = ctx.getImageData((h.x / 100) * canvas.width + i * itemWidth, (h.y / 100) * canvas.height, itemWidth, (h.height / 100) * canvas.height);
                             historyResults.push(recognizeDigit(itemImageData));
                         }
                         onVisionUpdate(currentResult, historyResults);
@@ -212,12 +204,6 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
         return { left: `${region.x}%`, top: `${region.y}%`, width: `${region.width}%`, height: `${region.height}%` };
     };
     
-    const getSetupInstructions = () => {
-        if (setupStep === 'drawingLatest') return "Bước 1: Vẽ khu vực [Kết quả mới]";
-        if (setupStep === 'drawingHistory') return "Bước 2: Vẽ khu vực [Lịch sử]";
-        return "";
-    };
-
     return (
         <div className="bg-white rounded-xl shadow-lg p-6 border-t-4 border-teal-500">
             <div className="flex items-center justify-between mb-4">
@@ -234,20 +220,29 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                     ref={overlayRef} className={`absolute inset-0 ${(setupStep === 'drawingLatest' || setupStep === 'drawingHistory') ? 'cursor-crosshair' : ''}`}
                     onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}
                 >
-                    {(setupStep === 'drawingLatest' || setupStep === 'drawingHistory') && (
-                        <div className="absolute inset-0 bg-black bg-opacity-70 flex flex-col items-center justify-center text-white p-4 text-center z-20">
-                             <Icon name="MousePointerClick" size={48} className="mb-4 text-yellow-400" />
-                             <h3 className="text-xl font-bold mb-2">{getSetupInstructions()}</h3>
-                             <p className="text-sm">Nhấn và kéo chuột trên màn hình để chọn vùng.</p>
+                    {/* Guided Setup Overlay */}
+                    {isCapturing && (setupStep === 'start' || setupStep === 'drawingLatest' || setupStep === 'drawingHistory') && (
+                        <div className="absolute inset-0 bg-black bg-opacity-80 flex flex-col items-center justify-center text-white p-4 text-center z-20">
+                             <Icon name="Settings" size={48} className="mb-4 text-yellow-400" />
+                             <h3 className="text-2xl font-bold mb-2">Cài đặt Vùng quét</h3>
+                             <p className="mb-6">Hãy thực hiện 2 bước để AI biết cần nhìn vào đâu.</p>
+                             <div className="w-full max-w-md space-y-4">
+                                <div className={`p-4 rounded-lg border-2 ${setupStep === 'drawingLatest' ? 'border-yellow-400' : 'border-gray-600'} ${regions.latest ? 'bg-green-500/20' : 'bg-gray-700/50'}`}>
+                                    <h4 className="font-bold flex items-center gap-2">{regions.latest ? <Icon name="CheckCircle" /> : 'Bước 1:'} Vẽ vùng [Kết quả mới]</h4>
+                                </div>
+                                <div className={`p-4 rounded-lg border-2 ${setupStep === 'drawingHistory' ? 'border-yellow-400' : 'border-gray-600'} ${regions.history ? 'bg-green-500/20' : 'bg-gray-700/50'}`}>
+                                    <h4 className="font-bold flex items-center gap-2">{regions.history ? <Icon name="CheckCircle" /> : 'Bước 2:'} Vẽ vùng [Lịch sử]</h4>
+                                </div>
+                             </div>
                         </div>
                     )}
 
-                    {regions.latest && <div className="absolute border-4 border-blue-500 z-10" style={getRegionStyle(regions.latest)}><span className="absolute -top-7 left-0 text-sm text-blue-500 bg-white px-2 py-0-5 rounded">Kết quả</span></div>}
-                    {regions.history && <div className="absolute border-4 border-green-500 z-10" style={getRegionStyle(regions.history)}><span className="absolute -top-7 left-0 text-sm text-green-500 bg-white px-2 py-0-5 rounded">Lịch sử</span></div>}
+                    {regions.latest && <div className="absolute border-4 border-blue-500 z-10" style={getRegionStyle(regions.latest)}><span className="absolute -top-7 left-0 text-sm text-blue-500 bg-white px-2 py-0.5 rounded">Kết quả</span></div>}
+                    {regions.history && <div className="absolute border-4 border-green-500 z-10" style={getRegionStyle(regions.history)}><span className="absolute -top-7 left-0 text-sm text-green-500 bg-white px-2 py-0.5 rounded">Lịch sử</span></div>}
                     {tempRegion && <div className="absolute border-4 border-dashed border-yellow-400 bg-yellow-400 bg-opacity-20 z-10" style={getRegionStyle(tempRegion)} />}
                 </div>
             </div>
-            {isCapturing && <button onClick={resetSetup} className="flex items-center justify-center gap-2 p-2 rounded-lg text-sm w-full bg-gray-200 hover:bg-gray-300 mt-4"><Icon name="Settings" size={16} /> Cài đặt lại Vùng</button>}
+            {isCapturing && setupStep === 'complete' && <button onClick={() => setSetupStep('start')} className="flex items-center justify-center gap-2 p-2 rounded-lg text-sm w-full bg-gray-200 hover:bg-gray-300 mt-4"><Icon name="Settings" size={16} /> Cài đặt lại Vùng</button>}
         </div>
     );
 };
