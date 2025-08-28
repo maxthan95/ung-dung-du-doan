@@ -74,59 +74,24 @@ const AIPredictionDisplay = ({ prediction, analysis, isAnalyzing }) => {
     );
 };
 
-// --- FINAL ADVANCED VISION ANALYZER (WITH GUIDED SETUP AND LARGER UI) ---
-
-const VisionAnalyzer = ({ onVisionUpdate, results }) => {
+// --- NEW VISION SETTINGS MODAL ---
+const VisionSettingsModal = ({ isOpen, onClose, onSave, stream }) => {
     const videoRef = useRef(null);
-    const canvasRef = useRef(null);
     const overlayRef = useRef(null);
-    const [isCapturing, setIsCapturing] = useState(false);
-    const [stream, setStream] = useState(null);
-    
-    const [setupStep, setSetupStep] = useState('idle'); // idle, drawingLatest, drawingHistory, complete
+    const [setupStep, setSetupStep] = useState('drawingLatest');
     const [tempRegion, setTempRegion] = useState(null);
     const [isDragging, setIsDragging] = useState(false);
-    const [regions, setRegions] = useState(() => {
-        try {
-            const saved = localStorage.getItem('visionRegions');
-            return saved ? JSON.parse(saved) : { latest: null, history: null };
-        } catch { return { latest: null, history: null }; }
-    });
+    const [localRegions, setLocalRegions] = useState({ latest: null, history: null });
 
-    const [lastResult, setLastResult] = useState(null);
+    useEffect(() => {
+        if (isOpen && stream && videoRef.current) {
+            videoRef.current.srcObject = stream;
+        }
+    }, [isOpen, stream]);
 
-    const recognizeDigit = (imageData) => {
-        const data = imageData.data;
-        let r = 0, g = 0, b = 0;
-        for (let i = 0; i < data.length; i += 4) { r += data[i]; g += data[i + 1]; b += data[i + 2]; }
-        const pixelCount = data.length / 4;
-        r /= pixelCount; g /= pixelCount; b /= pixelCount;
-        if (r > 150 && g < 100 && b < 100) return 3; if (r > 150 && g > 100 && b < 100) return 2;
-        if (r < 100 && g < 100 && b < 100) return 4; if (r > 180 && g > 180 && b > 180) return 0;
-        return 1;
-    };
-
-    const startCapture = async () => {
-        try {
-            const mediaStream = await navigator.mediaDevices.getDisplayMedia({ video: { cursor: "never" }, audio: false });
-            setStream(mediaStream);
-            if (videoRef.current) videoRef.current.srcObject = mediaStream;
-            setIsCapturing(true);
-            if (regions.latest && regions.history) {
-                setSetupStep('complete');
-            } else {
-                setSetupStep('start');
-            }
-        } catch (err) { alert("Không thể bắt đầu ghi hình. Vui lòng cấp quyền."); }
-    };
-
-    const stopCapture = () => {
-        if (stream) stream.getTracks().forEach(track => track.stop());
-        setStream(null); setIsCapturing(false); setLastResult(null); setSetupStep('idle');
-    };
+    if (!isOpen) return null;
 
     const handleMouseDown = (e) => {
-        if (setupStep !== 'drawingLatest' && setupStep !== 'drawingHistory') return;
         setIsDragging(true);
         const rect = overlayRef.current.getBoundingClientRect();
         const x = (e.clientX - rect.left) / rect.width * 100;
@@ -152,22 +117,102 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
         };
         
         if (setupStep === 'drawingLatest') {
-            setRegions(prev => ({ ...prev, latest: newRegion }));
+            setLocalRegions(prev => ({ ...prev, latest: newRegion }));
             setSetupStep('drawingHistory');
         } else if (setupStep === 'drawingHistory') {
-            setRegions(prev => ({ ...prev, history: newRegion }));
+            setLocalRegions(prev => ({ ...prev, history: newRegion }));
             setSetupStep('complete');
         }
         setTempRegion(null);
     };
 
-    useEffect(() => {
-        localStorage.setItem('visionRegions', JSON.stringify(regions));
-    }, [regions]);
+    const handleSave = () => {
+        onSave(localRegions);
+        onClose();
+    };
+
+    const getRegionStyle = (region) => {
+        if (!region) return {};
+        return { left: `${region.x}%`, top: `${region.y}%`, width: `${region.width}%`, height: `${region.height}%` };
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-4xl">
+                <h2 className="text-xl font-bold text-gray-800 mb-4">Cài đặt Vùng quét</h2>
+                <div className="relative bg-gray-900 rounded-lg overflow-hidden w-full" style={{ paddingBottom: '56.25%' }}>
+                    <video ref={videoRef} autoPlay muted className="absolute top-0 left-0 w-full h-full object-contain" />
+                    <div ref={overlayRef} className="absolute inset-0 cursor-crosshair" onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}>
+                        <div className="absolute inset-0 bg-black bg-opacity-50 flex flex-col items-center justify-center text-white p-4 text-center z-20">
+                             <Icon name="MousePointerClick" size={48} className="mb-4 text-yellow-400" />
+                             <h3 className="text-2xl font-bold mb-2">{setupStep === 'drawingLatest' ? 'Bước 1: Vẽ vùng [Kết quả mới]' : 'Bước 2: Vẽ vùng [Lịch sử]'}</h3>
+                             <p className="text-md">Nhấn và kéo chuột trên màn hình để chọn vùng.</p>
+                        </div>
+                        {localRegions.latest && <div className="absolute border-4 border-blue-500 z-10" style={getRegionStyle(localRegions.latest)} />}
+                        {localRegions.history && <div className="absolute border-4 border-green-500 z-10" style={getRegionStyle(localRegions.history)} />}
+                        {tempRegion && <div className="absolute border-4 border-dashed border-yellow-400 bg-yellow-400 bg-opacity-20 z-10" style={getRegionStyle(tempRegion)} />}
+                    </div>
+                </div>
+                <div className="mt-4 flex justify-end gap-4">
+                    <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm bg-gray-200 hover:bg-gray-300">Hủy</button>
+                    <button onClick={handleSave} disabled={!localRegions.latest || !localRegions.history} className="px-4 py-2 rounded-lg text-sm text-white bg-teal-500 hover:bg-teal-600 disabled:bg-gray-400">Lưu & Áp dụng</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// --- VISION ANALYZER COMPONENT ---
+const VisionAnalyzer = ({ onVisionUpdate, results }) => {
+    const videoRef = useRef(null);
+    const canvasRef = useRef(null);
+    const [isCapturing, setIsCapturing] = useState(false);
+    const [stream, setStream] = useState(null);
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    
+    const [regions, setRegions] = useState(() => {
+        try {
+            const saved = localStorage.getItem('visionRegions');
+            return saved ? JSON.parse(saved) : { latest: null, history: null };
+        } catch { return { latest: null, history: null }; }
+    });
+
+    const [lastResult, setLastResult] = useState(null);
+
+    const recognizeDigit = (imageData) => {
+        const data = imageData.data; let r = 0, g = 0, b = 0;
+        for (let i = 0; i < data.length; i += 4) { r += data[i]; g += data[i + 1]; b += data[i + 2]; }
+        const pixelCount = data.length / 4; r /= pixelCount; g /= pixelCount; b /= pixelCount;
+        if (r > 150 && g < 100 && b < 100) return 3; if (r > 150 && g > 100 && b < 100) return 2;
+        if (r < 100 && g < 100 && b < 100) return 4; if (r > 180 && g > 180 && b > 180) return 0;
+        return 1;
+    };
+
+    const startCapture = async () => {
+        try {
+            const mediaStream = await navigator.mediaDevices.getDisplayMedia({ video: { cursor: "never" }, audio: false });
+            setStream(mediaStream);
+            if (videoRef.current) videoRef.current.srcObject = mediaStream;
+            setIsCapturing(true);
+            if (!regions.latest || !regions.history) {
+                setIsSettingsOpen(true);
+            }
+        } catch (err) { alert("Không thể bắt đầu ghi hình. Vui lòng cấp quyền."); }
+    };
+
+    const stopCapture = () => {
+        if (stream) stream.getTracks().forEach(track => track.stop());
+        setStream(null); setIsCapturing(false); setLastResult(null);
+    };
+
+    const handleSaveSettings = (newRegions) => {
+        setRegions(newRegions);
+        localStorage.setItem('visionRegions', JSON.stringify(newRegions));
+    };
 
     useEffect(() => {
         let intervalId;
-        if (isCapturing && setupStep === 'complete') {
+        if (isCapturing && regions.latest && regions.history) {
             const video = videoRef.current;
             const canvas = canvasRef.current;
             const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -197,56 +242,39 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
             }, 1000);
         }
         return () => clearInterval(intervalId);
-    }, [isCapturing, setupStep, regions, lastResult, onVisionUpdate]);
+    }, [isCapturing, regions, lastResult, onVisionUpdate]);
 
     const getRegionStyle = (region) => {
         if (!region) return {};
         return { left: `${region.x}%`, top: `${region.y}%`, width: `${region.width}%`, height: `${region.height}%` };
     };
-    
+
     return (
         <div className="bg-white rounded-xl shadow-lg p-6 border-t-4 border-teal-500">
+            <VisionSettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} onSave={handleSaveSettings} stream={stream} />
             <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-teal-800">🔬 Phân tích Vision AI</h2>
-                <button onClick={isCapturing ? stopCapture : startCapture} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-white ${isCapturing ? 'bg-red-500 hover:bg-red-600' : 'bg-teal-500 hover:bg-teal-600'}`}>
-                    {isCapturing ? <Icon name="VideoOff" size={16} /> : <Icon name="Video" size={16} />}
-                    {isCapturing ? 'Dừng Ghi' : 'Bắt đầu Ghi'}
-                </button>
+                <div className="flex items-center gap-2">
+                    <button onClick={() => setIsSettingsOpen(true)} disabled={!isCapturing} className="p-2 rounded-lg bg-gray-200 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed" title="Cài đặt khu vực">
+                        <Icon name="Settings" size={16} />
+                    </button>
+                    <button onClick={isCapturing ? stopCapture : startCapture} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-white ${isCapturing ? 'bg-red-500 hover:bg-red-600' : 'bg-teal-500 hover:bg-teal-600'}`}>
+                        {isCapturing ? <Icon name="VideoOff" size={16} /> : <Icon name="Video" size={16} />}
+                        {isCapturing ? 'Dừng Ghi' : 'Bắt đầu Ghi'}
+                    </button>
+                </div>
             </div>
             <div className="relative bg-gray-900 rounded-lg overflow-hidden w-full" style={{ paddingBottom: '56.25%' }}>
                 <video ref={videoRef} autoPlay muted className="absolute top-0 left-0 w-full h-full object-contain" />
                 <canvas ref={canvasRef} className="hidden" />
-                <div 
-                    ref={overlayRef} className={`absolute inset-0 ${(setupStep === 'drawingLatest' || setupStep === 'drawingHistory') ? 'cursor-crosshair' : ''}`}
-                    onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}
-                >
-                    {/* Guided Setup Overlay */}
-                    {isCapturing && (setupStep === 'start' || setupStep === 'drawingLatest' || setupStep === 'drawingHistory') && (
-                        <div className="absolute inset-0 bg-black bg-opacity-80 flex flex-col items-center justify-center text-white p-4 text-center z-20">
-                             <Icon name="Settings" size={48} className="mb-4 text-yellow-400" />
-                             <h3 className="text-2xl font-bold mb-2">Cài đặt Vùng quét</h3>
-                             <p className="mb-6">Hãy thực hiện 2 bước để AI biết cần nhìn vào đâu.</p>
-                             <div className="w-full max-w-md space-y-4">
-                                <div className={`p-4 rounded-lg border-2 ${setupStep === 'drawingLatest' ? 'border-yellow-400' : 'border-gray-600'} ${regions.latest ? 'bg-green-500/20' : 'bg-gray-700/50'}`}>
-                                    <h4 className="font-bold flex items-center gap-2">{regions.latest ? <Icon name="CheckCircle" /> : 'Bước 1:'} Vẽ vùng [Kết quả mới]</h4>
-                                </div>
-                                <div className={`p-4 rounded-lg border-2 ${setupStep === 'drawingHistory' ? 'border-yellow-400' : 'border-gray-600'} ${regions.history ? 'bg-green-500/20' : 'bg-gray-700/50'}`}>
-                                    <h4 className="font-bold flex items-center gap-2">{regions.history ? <Icon name="CheckCircle" /> : 'Bước 2:'} Vẽ vùng [Lịch sử]</h4>
-                                </div>
-                             </div>
-                        </div>
-                    )}
-
-                    {regions.latest && <div className="absolute border-4 border-blue-500 z-10" style={getRegionStyle(regions.latest)}><span className="absolute -top-7 left-0 text-sm text-blue-500 bg-white px-2 py-0.5 rounded">Kết quả</span></div>}
-                    {regions.history && <div className="absolute border-4 border-green-500 z-10" style={getRegionStyle(regions.history)}><span className="absolute -top-7 left-0 text-sm text-green-500 bg-white px-2 py-0.5 rounded">Lịch sử</span></div>}
-                    {tempRegion && <div className="absolute border-4 border-dashed border-yellow-400 bg-yellow-400 bg-opacity-20 z-10" style={getRegionStyle(tempRegion)} />}
+                <div className="absolute inset-0">
+                    {regions.latest && <div className="absolute border-2 border-blue-500" style={getRegionStyle(regions.latest)} />}
+                    {regions.history && <div className="absolute border-2 border-green-500" style={getRegionStyle(regions.history)} />}
                 </div>
             </div>
-            {isCapturing && setupStep === 'complete' && <button onClick={() => setSetupStep('start')} className="flex items-center justify-center gap-2 p-2 rounded-lg text-sm w-full bg-gray-200 hover:bg-gray-300 mt-4"><Icon name="Settings" size={16} /> Cài đặt lại Vùng</button>}
         </div>
     );
 };
-
 
 // --- MAIN APP COMPONENT ---
 
