@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, Video, VideoOff, ScanEye, CheckCircle, XCircle, List, Grid, RotateCcw, TrendingUp, Settings, MousePointerClick } from 'lucide-react';
+import { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, Video, VideoOff, ScanEye, CheckCircle, XCircle, List, Grid, RotateCcw, TrendingUp, Settings, MousePointerClick, RefreshCw } from 'lucide-react';
 
 // --- HELPER COMPONENTS ---
 
 const Icon = ({ name, ...props }) => {
-    const icons = { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, Video, VideoOff, ScanEye, CheckCircle, XCircle, List, Grid, RotateCcw, TrendingUp, Settings, MousePointerClick };
+    const icons = { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, Video, VideoOff, ScanEye, CheckCircle, XCircle, List, Grid, RotateCcw, TrendingUp, Settings, MousePointerClick, RefreshCw };
     const LucideIcon = icons[name];
     return LucideIcon ? <LucideIcon {...props} /> : null;
 };
@@ -74,20 +74,24 @@ const AIPredictionDisplay = ({ prediction, analysis, isAnalyzing }) => {
     );
 };
 
-// --- NEW VISION SETTINGS MODAL ---
-const VisionSettingsModal = ({ isOpen, onClose, onSave, stream }) => {
+// --- NEW VISION SETTINGS MODAL (WITH REDRAW FUNCTIONALITY) ---
+const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialRegions }) => {
     const videoRef = useRef(null);
     const overlayRef = useRef(null);
     const [setupStep, setSetupStep] = useState('drawingLatest');
     const [tempRegion, setTempRegion] = useState(null);
     const [isDragging, setIsDragging] = useState(false);
-    const [localRegions, setLocalRegions] = useState({ latest: null, history: null });
+    const [localRegions, setLocalRegions] = useState(initialRegions || { latest: null, history: null });
 
     useEffect(() => {
         if (isOpen && stream && videoRef.current) {
             videoRef.current.srcObject = stream;
         }
-    }, [isOpen, stream]);
+        if (isOpen) {
+            setLocalRegions(initialRegions || { latest: null, history: null });
+            setSetupStep('drawingLatest');
+        }
+    }, [isOpen, stream, initialRegions]);
 
     if (!isOpen) return null;
 
@@ -131,6 +135,11 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream }) => {
         onClose();
     };
 
+    const handleRedraw = (regionToRedraw) => {
+        setLocalRegions(prev => ({ ...prev, [regionToRedraw]: null }));
+        setSetupStep(regionToRedraw === 'latest' ? 'drawingLatest' : 'drawingHistory');
+    };
+
     const getRegionStyle = (region) => {
         if (!region) return {};
         return { left: `${region.x}%`, top: `${region.y}%`, width: `${region.width}%`, height: `${region.height}%` };
@@ -140,31 +149,34 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream }) => {
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-4xl">
                 <h2 className="text-xl font-bold text-gray-800 mb-4">Cài đặt Vùng quét</h2>
-                <div className="relative bg-gray-900 rounded-lg overflow-hidden w-full" style={{ paddingBottom: '56.25%' }}>
-                    <video ref={videoRef} autoPlay muted className="absolute top-0 left-0 w-full h-full object-contain" />
-                    <div ref={overlayRef} className="absolute inset-0 cursor-crosshair" onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}>
-                        {/* FIXED: Added pointer-events-none to the instruction overlay */}
-                        <div className="absolute inset-0 bg-black bg-opacity-80 flex flex-col items-center justify-center text-white p-4 text-center z-20 pointer-events-none">
-                             <Icon name="Settings" size={48} className="mb-4 text-yellow-400" />
-                             <h3 className="text-2xl font-bold mb-2">Cài đặt Vùng quét</h3>
-                             <p className="mb-6">Hãy thực hiện 2 bước để AI biết cần nhìn vào đâu.</p>
-                             <div className="w-full max-w-md space-y-4">
-                                <div className={`p-4 rounded-lg border-2 ${setupStep === 'drawingLatest' ? 'border-yellow-400' : 'border-gray-600'} ${localRegions.latest ? 'bg-green-500/20' : 'bg-gray-700/50'}`}>
-                                    <h4 className="font-bold flex items-center gap-2">{localRegions.latest ? <Icon name="CheckCircle" /> : 'Bước 1:'} Vẽ vùng [Kết quả mới]</h4>
-                                </div>
-                                <div className={`p-4 rounded-lg border-2 ${setupStep === 'drawingHistory' ? 'border-yellow-400' : 'border-gray-600'} ${localRegions.history ? 'bg-green-500/20' : 'bg-gray-700/50'}`}>
-                                    <h4 className="font-bold flex items-center gap-2">{localRegions.history ? <Icon name="CheckCircle" /> : 'Bước 2:'} Vẽ vùng [Lịch sử]</h4>
-                                </div>
-                             </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="md:col-span-2 relative bg-gray-900 rounded-lg overflow-hidden w-full" style={{ paddingBottom: '56.25%' }}>
+                        <video ref={videoRef} autoPlay muted className="absolute top-0 left-0 w-full h-full object-contain" />
+                        <div ref={overlayRef} className="absolute inset-0 cursor-crosshair" onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}>
+                            {localRegions.latest && <div className="absolute border-4 border-blue-500 z-10" style={getRegionStyle(localRegions.latest)} />}
+                            {localRegions.history && <div className="absolute border-4 border-green-500 z-10" style={getRegionStyle(localRegions.history)} />}
+                            {tempRegion && <div className="absolute border-4 border-dashed border-yellow-400 bg-yellow-400 bg-opacity-20 z-10" style={getRegionStyle(tempRegion)} />}
                         </div>
-                        {localRegions.latest && <div className="absolute border-4 border-blue-500 z-10" style={getRegionStyle(localRegions.latest)} />}
-                        {localRegions.history && <div className="absolute border-4 border-green-500 z-10" style={getRegionStyle(localRegions.history)} />}
-                        {tempRegion && <div className="absolute border-4 border-dashed border-yellow-400 bg-yellow-400 bg-opacity-20 z-10" style={getRegionStyle(tempRegion)} />}
                     </div>
-                </div>
-                <div className="mt-4 flex justify-end gap-4">
-                    <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm bg-gray-200 hover:bg-gray-300">Hủy</button>
-                    <button onClick={handleSave} disabled={!localRegions.latest || !localRegions.history} className="px-4 py-2 rounded-lg text-sm text-white bg-teal-500 hover:bg-teal-600 disabled:bg-gray-400">Lưu & Áp dụng</button>
+                    <div className="flex flex-col justify-center space-y-4">
+                        <h3 className="font-bold text-gray-700">Hướng dẫn:</h3>
+                        <div className={`p-4 rounded-lg border-2 ${setupStep === 'drawingLatest' ? 'border-yellow-400' : 'border-gray-600'} ${localRegions.latest ? 'bg-green-500/10' : 'bg-gray-100'}`}>
+                            <div className="flex justify-between items-center">
+                                <h4 className="font-bold flex items-center gap-2">{localRegions.latest ? <Icon name="CheckCircle" className="text-green-600" /> : 'Bước 1:'} Vẽ vùng [Kết quả]</h4>
+                                {localRegions.latest && <button onClick={() => handleRedraw('latest')} className="p-1 hover:bg-gray-200 rounded"><Icon name="RefreshCw" size={14} /></button>}
+                            </div>
+                        </div>
+                        <div className={`p-4 rounded-lg border-2 ${setupStep === 'drawingHistory' ? 'border-yellow-400' : 'border-gray-600'} ${localRegions.history ? 'bg-green-500/10' : 'bg-gray-100'}`}>
+                            <div className="flex justify-between items-center">
+                                <h4 className="font-bold flex items-center gap-2">{localRegions.history ? <Icon name="CheckCircle" className="text-green-600" /> : 'Bước 2:'} Vẽ vùng [Lịch sử]</h4>
+                                {localRegions.history && <button onClick={() => handleRedraw('history')} className="p-1 hover:bg-gray-200 rounded"><Icon name="RefreshCw" size={14} /></button>}
+                            </div>
+                        </div>
+                        <div className="mt-4 flex flex-col gap-2">
+                            <button onClick={handleSave} disabled={!localRegions.latest || !localRegions.history} className="w-full px-4 py-2 rounded-lg text-sm text-white bg-teal-500 hover:bg-teal-600 disabled:bg-gray-400">Lưu & Áp dụng</button>
+                            <button onClick={onClose} className="w-full px-4 py-2 rounded-lg text-sm bg-gray-200 hover:bg-gray-300">Hủy</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -260,7 +272,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
 
     return (
         <div className="bg-white rounded-xl shadow-lg p-6 border-t-4 border-teal-500">
-            <VisionSettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} onSave={handleSaveSettings} stream={stream} />
+            <VisionSettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} onSave={handleSaveSettings} stream={stream} initialRegions={regions} />
             <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-teal-800">🔬 Phân tích Vision AI</h2>
                 <div className="flex items-center gap-2">
@@ -375,7 +387,7 @@ export default function App() {
         redCount: res,
         timestamp: new Date().toLocaleTimeString(),
         isFromVision: true,
-        predictionAtFlip: null
+        predictionAtFlip: prediction
     }));
     setResults(newFullResults);
   };
