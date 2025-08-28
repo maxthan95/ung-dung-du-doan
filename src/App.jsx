@@ -74,6 +74,7 @@ const AIPredictionDisplay = ({ prediction, analysis, isAnalyzing }) => {
     );
 };
 
+// --- NEW VISION SETTINGS MODAL ---
 const VisionSettingsModal = ({ isOpen, onClose, onSave, stream }) => {
     const videoRef = useRef(null);
     const overlayRef = useRef(null);
@@ -142,10 +143,18 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream }) => {
                 <div className="relative bg-gray-900 rounded-lg overflow-hidden w-full" style={{ paddingBottom: '56.25%' }}>
                     <video ref={videoRef} autoPlay muted className="absolute top-0 left-0 w-full h-full object-contain" />
                     <div ref={overlayRef} className="absolute inset-0 cursor-crosshair" onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}>
-                        <div className="absolute inset-0 bg-black bg-opacity-50 flex flex-col items-center justify-center text-white p-4 text-center z-20">
-                             <Icon name="MousePointerClick" size={48} className="mb-4 text-yellow-400" />
-                             <h3 className="text-2xl font-bold mb-2">{setupStep === 'drawingLatest' ? 'Bước 1: Vẽ vùng [Kết quả mới]' : 'Bước 2: Vẽ vùng [Lịch sử]'}</h3>
-                             <p className="text-md">Nhấn và kéo chuột trên màn hình để chọn vùng.</p>
+                        <div className="absolute inset-0 bg-black bg-opacity-80 flex flex-col items-center justify-center text-white p-4 text-center z-20 pointer-events-none">
+                             <Icon name="Settings" size={48} className="mb-4 text-yellow-400" />
+                             <h3 className="text-2xl font-bold mb-2">Cài đặt Vùng quét</h3>
+                             <p className="mb-6">Hãy thực hiện 2 bước để AI biết cần nhìn vào đâu.</p>
+                             <div className="w-full max-w-md space-y-4">
+                                <div className={`p-4 rounded-lg border-2 ${setupStep === 'drawingLatest' ? 'border-yellow-400' : 'border-gray-600'} ${localRegions.latest ? 'bg-green-500/20' : 'bg-gray-700/50'}`}>
+                                    <h4 className="font-bold flex items-center gap-2">{localRegions.latest ? <Icon name="CheckCircle" /> : 'Bước 1:'} Vẽ vùng [Kết quả mới]</h4>
+                                </div>
+                                <div className={`p-4 rounded-lg border-2 ${setupStep === 'drawingHistory' ? 'border-yellow-400' : 'border-gray-600'} ${localRegions.history ? 'bg-green-500/20' : 'bg-gray-700/50'}`}>
+                                    <h4 className="font-bold flex items-center gap-2">{localRegions.history ? <Icon name="CheckCircle" /> : 'Bước 2:'} Vẽ vùng [Lịch sử]</h4>
+                                </div>
+                             </div>
                         </div>
                         {localRegions.latest && <div className="absolute border-4 border-blue-500 z-10" style={getRegionStyle(localRegions.latest)} />}
                         {localRegions.history && <div className="absolute border-4 border-green-500 z-10" style={getRegionStyle(localRegions.history)} />}
@@ -161,6 +170,7 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream }) => {
     );
 };
 
+// --- VISION ANALYZER COMPONENT ---
 const VisionAnalyzer = ({ onVisionUpdate, results }) => {
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
@@ -275,55 +285,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
     );
 };
 
-const CompactHistoryItem = ({ result }) => (
-    <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg text-sm">
-        <div className="flex items-center gap-3">
-            <span className="font-medium text-gray-600">#{result.flip}</span>
-            <div className="flex gap-1">
-                {result.outcome.split(', ').map((coin, i) => (
-                    <div key={i} className={`w-5 h-5 rounded-full ${coin === 'Đỏ' ? 'bg-red-500' : 'bg-gray-300'}`} />
-                ))}
-            </div>
-            <span className="font-bold text-blue-600">{result.redCount} Đỏ</span>
-        </div>
-        <div className="flex items-center gap-3 text-xs text-gray-500">
-            {result.predictionAtFlip && (
-                <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full ${result.redCount === result.predictionAtFlip.value ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                    {result.redCount === result.predictionAtFlip.value ? <Icon name="CheckCircle" size={12}/> : <Icon name="XCircle" size={12}/>}
-                    <span>Dự đoán: {result.predictionAtFlip.value}</span>
-                </div>
-            )}
-            {result.isFromVision && <Icon name="ScanEye" size={12} className="text-purple-500" title="Kết quả từ Vision AI"/>}
-            <span>{result.timestamp}</span>
-        </div>
-    </div>
-);
-
-const VisualHistoryItem = ({ result }) => (
-    <div className="flex items-center justify-between p-3 bg-gray-100 rounded-lg mb-2 shadow-sm">
-        <div className="flex items-center gap-4">
-            <span className="font-bold text-gray-700 text-base w-10 text-center">#{result.flip}</span>
-            <div className="flex gap-2">
-                {result.outcome.split(', ').map((coin, i) => (
-                    <div key={i} className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold shadow-inner ${coin === 'Đỏ' ? 'bg-red-500 text-white' : 'bg-gray-300 text-gray-700'}`}>
-                        {coin === 'Đỏ' ? 'ĐỎ' : 'TRẮNG'}
-                    </div>
-                ))}
-            </div>
-        </div>
-        <div className="flex flex-col items-end gap-1 text-xs text-gray-500">
-            <div className="font-bold text-lg text-blue-600">{result.redCount} Đỏ</div>
-            {result.predictionAtFlip && (
-                <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full ${result.redCount === result.predictionAtFlip.value ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                    {result.redCount === result.predictionAtFlip.value ? <Icon name="CheckCircle" size={12}/> : <Icon name="XCircle" size={12}/>}
-                    <span>Dự đoán: {result.predictionAtFlip.value}</span>
-                </div>
-            )}
-            {result.isFromVision && <Icon name="ScanEye" size={12} className="text-purple-500" title="Kết quả từ Vision AI"/>}
-            <span>{result.timestamp}</span>
-        </div>
-    </div>
-);
+// --- MAIN APP COMPONENT ---
 
 export default function App() {
   const [results, setResults] = useState(() => {
