@@ -210,14 +210,6 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
         return { left: `${region.x}%`, top: `${region.y}%`, width: `${region.width}%`, height: `${region.height}%` };
     };
     
-    const getHistoryColor = (count) => {
-        switch(count) {
-            case 0: return 'bg-gray-400 text-white'; case 1: return 'bg-red-200 text-red-800';
-            case 2: return 'bg-yellow-300 text-yellow-800'; case 3: return 'bg-red-500 text-white';
-            case 4: return 'bg-red-700 text-white'; default: return 'bg-gray-200 text-gray-800';
-        }
-    }
-
     const getSetupInstructions = () => {
         if (setupStep === 'drawingLatest') return "Bước 1: Vẽ khu vực [Kết quả mới]";
         if (setupStep === 'drawingHistory') return "Bước 2: Vẽ khu vực [Lịch sử]";
@@ -234,26 +226,28 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                     {isCapturing ? 'Dừng Ghi' : 'Bắt đầu & Cài đặt'}
                 </button>
             </div>
-            {/* CHANGED: Removed aspect-video and added h-80 for a larger view */}
-            <div className="relative bg-gray-200 rounded-lg overflow-hidden h-80 mb-4">
-                <video ref={videoRef} autoPlay muted className="w-full h-full object-contain" />
+            <div className="relative bg-gray-900 rounded-lg overflow-hidden w-full" style={{ paddingBottom: '56.25%' /* 16:9 Aspect Ratio */ }}>
+                <video ref={videoRef} autoPlay muted className="absolute top-0 left-0 w-full h-full object-contain" />
                 <canvas ref={canvasRef} className="hidden" />
                 <div 
                     ref={overlayRef} className={`absolute inset-0 ${(setupStep === 'drawingLatest' || setupStep === 'drawingHistory') ? 'cursor-crosshair' : ''}`}
                     onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}
                 >
-                    {regions.latest && <div className="absolute border-2 border-blue-500" style={getRegionStyle(regions.latest)}><span className="absolute -top-5 left-0 text-xs text-blue-500 bg-white px-1 rounded">Kết quả</span></div>}
-                    {regions.history && <div className="absolute border-2 border-green-500" style={getRegionStyle(regions.history)}><span className="absolute -top-5 left-0 text-xs text-green-500 bg-white px-1 rounded">Lịch sử</span></div>}
-                    {tempRegion && <div className="absolute border-2 border-dashed border-yellow-400 bg-yellow-400 bg-opacity-20" style={getRegionStyle(tempRegion)} />}
+                    {/* Setup overlay */}
+                    {(setupStep === 'drawingLatest' || setupStep === 'drawingHistory') && (
+                        <div className="absolute inset-0 bg-black bg-opacity-70 flex flex-col items-center justify-center text-white p-4 text-center">
+                             <Icon name="MousePointerClick" size={48} className="mb-4 text-yellow-400" />
+                             <h3 className="text-xl font-bold mb-2">{getSetupInstructions()}</h3>
+                             <p className="text-sm">Nhấn và kéo chuột trên màn hình để chọn vùng.</p>
+                        </div>
+                    )}
+
+                    {regions.latest && <div className="absolute border-4 border-blue-500" style={getRegionStyle(regions.latest)}><span className="absolute -top-7 left-0 text-sm text-blue-500 bg-white px-2 py-0.5 rounded">Kết quả</span></div>}
+                    {regions.history && <div className="absolute border-4 border-green-500" style={getRegionStyle(regions.history)}><span className="absolute -top-7 left-0 text-sm text-green-500 bg-white px-2 py-0.5 rounded">Lịch sử</span></div>}
+                    {tempRegion && <div className="absolute border-4 border-dashed border-yellow-400 bg-yellow-400 bg-opacity-20" style={getRegionStyle(tempRegion)} />}
                 </div>
-                {(setupStep !== 'idle' && setupStep !== 'complete') && (
-                    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black bg-opacity-70 text-white text-xs px-3 py-1 rounded-full flex items-center gap-2">
-                        <Icon name="MousePointerClick" size={14} />
-                        <span>{getSetupInstructions()}</span>
-                    </div>
-                )}
             </div>
-            {isCapturing && <button onClick={resetSetup} className="flex items-center justify-center gap-2 p-2 rounded-lg text-sm w-full bg-gray-200 hover:bg-gray-300 mb-4"><Icon name="Settings" size={16} /> Cài đặt lại Vùng</button>}
+            {isCapturing && <button onClick={resetSetup} className="flex items-center justify-center gap-2 p-2 rounded-lg text-sm w-full bg-gray-200 hover:bg-gray-300 mt-4"><Icon name="Settings" size={16} /> Cài đặt lại Vùng</button>}
         </div>
     );
 };
@@ -387,51 +381,27 @@ export default function App() {
           </div>
         </header>
 
+        {/* CHANGED: Swapped column spans */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-1 space-y-6">
+          <div className="lg:col-span-2 space-y-6">
             <VisionAnalyzer onVisionUpdate={handleVisionUpdate} results={results} />
+          </div>
+
+          <div className="lg:col-span-1 space-y-6">
             <div className="bg-white rounded-xl shadow-lg p-6">
                 <AIPredictionDisplay prediction={prediction} analysis={analysis} isAnalyzing={isAnalyzing} />
             </div>
-          </div>
-
-          <div className="lg:col-span-2 space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <StatCard iconName="Target" title="Độ chính xác AI" value={`${accuracyStats.accuracy.toFixed(1)}%`} footer={`${accuracyStats.correct}/${accuracyStats.total} đúng`} color="border-green-500" />
-                <StatCard iconName="Sigma" title="Trung bình (Đỏ/lần)" value={patterns.average || '0.00'} footer="Dựa trên toàn bộ lịch sử" color="border-blue-500" />
-                <StatCard iconName="History" title="5 lần gần nhất" value="" color="border-yellow-500">
-                    <div className="flex items-center gap-2">
-                        {(patterns.recent && patterns.recent.length > 0 ? patterns.recent : Array(5).fill('-')).map((res, i) => (
-                            <div key={i} className={`w-8 h-8 rounded-full flex items-center justify-center text-gray-700 font-bold text-sm ${res !== '-' && res > 2 ? 'bg-red-100' : 'bg-gray-200'}`}>
-                                {res}
-                            </div>
-                        ))}
-                    </div>
-                </StatCard>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h2 className="text-lg font-semibold text-gray-800 mb-4">Phân Bố Kết Quả</h2>
-              {results.length > 0 ? (
-                <ResponsiveContainer width="100%" height={250}>
-                  <BarChart data={barChartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis unit="%" /><Tooltip formatter={(value) => `${value.toFixed(1)}%`} /><Legend /><Bar dataKey="Lý thuyết" fill="#8884d8" /><Bar dataKey="Thực tế" fill="#82ca9d" />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : <div className="text-center text-gray-500 py-16">Chưa có dữ liệu.</div>}
-            </div>
-
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-800">Lịch Sử Kết Quả</h2>
-                <button onClick={() => setVisualHistory(p => !p)} className="p-2 rounded-md hover:bg-gray-100 text-gray-600" title={visualHistory ? "Xem thu gọn" : "Xem trực quan"}>{visualHistory ? <Icon name="List" size={20} /> : <Icon name="Grid" size={20} />}</button>
-              </div>
-              <div className="max-h-96 overflow-y-auto pr-2">
-                {results.length > 0 ? (
-                  <div className="space-y-2">{results.slice(-15).reverse().map((result) => visualHistory ? <VisualHistoryItem key={result.flip} result={result} /> : <CompactHistoryItem key={result.flip} result={result} />)}</div>
-                ) : <div className="text-center text-gray-500 py-8">Chưa có lịch sử.</div>}
-              </div>
-            </div>
+            <StatCard iconName="Target" title="Độ chính xác AI" value={`${accuracyStats.accuracy.toFixed(1)}%`} footer={`${accuracyStats.correct}/${accuracyStats.total} đúng`} color="border-green-500" />
+            <StatCard iconName="Sigma" title="Trung bình (Đỏ/lần)" value={patterns.average || '0.00'} footer="Dựa trên toàn bộ lịch sử" color="border-blue-500" />
+            <StatCard iconName="History" title="5 lần gần nhất" value="" color="border-yellow-500">
+                <div className="flex items-center gap-2">
+                    {(patterns.recent && patterns.recent.length > 0 ? patterns.recent : Array(5).fill('-')).map((res, i) => (
+                        <div key={i} className={`w-8 h-8 rounded-full flex items-center justify-center text-gray-700 font-bold text-sm ${res !== '-' && res > 2 ? 'bg-red-100' : 'bg-gray-200'}`}>
+                            {res}
+                        </div>
+                    ))}
+                </div>
+            </StatCard>
           </div>
         </div>
       </div>
