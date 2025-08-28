@@ -74,7 +74,7 @@ const AIPredictionDisplay = ({ prediction, analysis, isAnalyzing }) => {
     );
 };
 
-// --- VISION SETTINGS MODAL (WITH REDRAW FUNCTIONALITY) ---
+// --- NEW VISION SETTINGS MODAL (WITH RESIZABLE REGIONS) ---
 const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialRegions }) => {
     const videoRef = useRef(null);
     const overlayRef = useRef(null);
@@ -82,6 +82,9 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialRegions }
     const [tempRegion, setTempRegion] = useState(null);
     const [isDragging, setIsDragging] = useState(false);
     const [localRegions, setLocalRegions] = useState(initialRegions || { latest: null, history: null });
+    
+    // State for resizing/moving
+    const [action, setAction] = useState({ type: 'none' }); // none, drawing, resizing, moving
 
     useEffect(() => {
         if (isOpen && stream && videoRef.current) {
@@ -96,37 +99,80 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialRegions }
     if (!isOpen) return null;
 
     const handleMouseDown = (e) => {
-        setIsDragging(true);
         const rect = overlayRef.current.getBoundingClientRect();
         const x = (e.clientX - rect.left) / rect.width * 100;
         const y = (e.clientY - rect.top) / rect.height * 100;
-        setTempRegion({ startX: x, startY: y, endX: x, endY: y });
+
+        // If clicking on a handle, start resizing
+        const handle = e.target.dataset.handle;
+        const regionType = e.target.dataset.region;
+        if (handle && regionType) {
+            setAction({ type: 'resizing', region: regionType, handle: handle, startX: x, startY: y, initialRegion: localRegions[regionType] });
+            return;
+        }
+        
+        // If clicking inside a region, start moving
+        for (const type of ['latest', 'history']) {
+            const region = localRegions[type];
+            if (region && x > region.x && x < region.x + region.width && y > region.y && y < region.y + region.height) {
+                setAction({ type: 'moving', region: type, startX: x, startY: y, initialRegion: region });
+                return;
+            }
+        }
+        
+        // Otherwise, start drawing
+        setAction({ type: 'drawing', startX: x, startY: y });
+        setTempRegion({ x: x, y: y, width: 0, height: 0 });
     };
 
     const handleMouseMove = (e) => {
-        if (!isDragging) return;
+        if (action.type === 'none') return;
+        
         const rect = overlayRef.current.getBoundingClientRect();
-        const x = (e.clientX - rect.left) / rect.width * 100;
-        const y = (e.clientY - rect.top) / rect.height * 100;
-        setTempRegion(prev => ({ ...prev, endX: x, endY: y }));
+        const mouseX = (e.clientX - rect.left) / rect.width * 100;
+        const mouseY = (e.clientY - rect.top) / rect.height * 100;
+        const deltaX = mouseX - action.startX;
+        const deltaY = mouseY - action.startY;
+
+        if (action.type === 'drawing') {
+            const newWidth = Math.abs(mouseX - action.startX);
+            const newHeight = Math.abs(mouseY - action.startY);
+            const newX = Math.min(mouseX, action.startX);
+            const newY = Math.min(mouseY, action.startY);
+            setTempRegion({ x: newX, y: newY, width: newWidth, height: newHeight });
+        } else if (action.type === 'moving') {
+            const newX = action.initialRegion.x + deltaX;
+            const newY = action.initialRegion.y + deltaY;
+            setLocalRegions(prev => ({ ...prev, [action.region]: { ...prev[action.region], x: newX, y: newY } }));
+        } else if (action.type === 'resizing') {
+            const { initialRegion, handle } = action;
+            let { x, y, width, height } = initialRegion;
+
+            if (handle.includes('right')) width = Math.max(5, initialRegion.width + deltaX);
+            if (handle.includes('left')) {
+                width = Math.max(5, initialRegion.width - deltaX);
+                x = initialRegion.x + deltaX;
+            }
+            if (handle.includes('bottom')) height = Math.max(5, initialRegion.height + deltaY);
+            if (handle.includes('top')) {
+                height = Math.max(5, initialRegion.height - deltaY);
+                y = initialRegion.y + deltaY;
+            }
+            setLocalRegions(prev => ({ ...prev, [action.region]: { x, y, width, height } }));
+        }
     };
 
     const handleMouseUp = () => {
-        if (!isDragging) return;
-        setIsDragging(false);
-        const { startX, startY, endX, endY } = tempRegion;
-        const newRegion = {
-            x: Math.min(startX, endX), y: Math.min(startY, endY),
-            width: Math.abs(endX - startX), height: Math.abs(endY - startY),
-        };
-        
-        if (setupStep === 'drawingLatest') {
-            setLocalRegions(prev => ({ ...prev, latest: newRegion }));
-            setSetupStep('drawingHistory');
-        } else if (setupStep === 'drawingHistory') {
-            setLocalRegions(prev => ({ ...prev, history: newRegion }));
-            setSetupStep('complete');
+        if (action.type === 'drawing' && tempRegion && tempRegion.width > 1 && tempRegion.height > 1) {
+            if (setupStep === 'drawingLatest') {
+                setLocalRegions(prev => ({ ...prev, latest: tempRegion }));
+                setSetupStep('drawingHistory');
+            } else if (setupStep === 'drawingHistory') {
+                setLocalRegions(prev => ({ ...prev, history: tempRegion }));
+                setSetupStep('complete');
+            }
         }
+        setAction({ type: 'none' });
         setTempRegion(null);
     };
 
@@ -144,6 +190,28 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialRegions }
         if (!region) return {};
         return { left: `${region.x}%`, top: `${region.y}%`, width: `${region.width}%`, height: `${region.height}%` };
     };
+    
+    const ResizableBox = ({ region, type, color }) => {
+        if (!region) return null;
+        const handles = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
+        return (
+            <div className={`absolute border-4 ${color} z-10`} style={getRegionStyle(region)}>
+                {handles.map(handle => (
+                    <div 
+                        key={handle}
+                        data-handle={handle}
+                        data-region={type}
+                        className="absolute w-4 h-4 bg-white border-2 border-gray-800 rounded-full -m-2"
+                        style={{
+                            top: handle.includes('top') ? '0%' : '100%',
+                            left: handle.includes('left') ? '0%' : '100%',
+                            cursor: `${handle.split('-')[0] === 'top' ? 'n' : 's'}${handle.split('-')[1] === 'left' ? 'w' : 'e'}-resize`,
+                        }}
+                    />
+                ))}
+            </div>
+        );
+    };
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
@@ -153,14 +221,15 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialRegions }
                     <div className="md:col-span-2 relative bg-gray-900 rounded-lg overflow-hidden w-full" style={{ paddingBottom: '56.25%' }}>
                         <video ref={videoRef} autoPlay muted className="absolute top-0 left-0 w-full h-full object-contain" />
                         <div ref={overlayRef} className="absolute inset-0 cursor-crosshair" onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}>
-                            {/* FIXED: Added pointer-events-none to the instruction overlay */}
-                            <div className="absolute inset-0 bg-black bg-opacity-80 flex flex-col items-center justify-center text-white p-4 text-center z-20 pointer-events-none">
-                                <Icon name="Settings" size={48} className="mb-4 text-yellow-400" />
-                                <h3 className="text-2xl font-bold mb-2">Cài đặt Vùng quét</h3>
-                                <p className="mb-6">Hãy thực hiện 2 bước để AI biết cần nhìn vào đâu.</p>
-                            </div>
-                            {localRegions.latest && <div className="absolute border-4 border-blue-500 z-10" style={getRegionStyle(localRegions.latest)} />}
-                            {localRegions.history && <div className="absolute border-4 border-green-500 z-10" style={getRegionStyle(localRegions.history)} />}
+                            {/* Instruction overlay */}
+                            {(setupStep === 'drawingLatest' || setupStep === 'drawingHistory') && (
+                                <div className="absolute inset-0 bg-black bg-opacity-80 flex flex-col items-center justify-center text-white p-4 text-center z-20 pointer-events-none">
+                                    <Icon name="MousePointerClick" size={48} className="mb-4 text-yellow-400" />
+                                    <h3 className="text-2xl font-bold mb-2">{setupStep === 'drawingLatest' ? 'Bước 1: Vẽ vùng [Kết quả mới]' : 'Bước 2: Vẽ vùng [Lịch sử]'}</h3>
+                                </div>
+                            )}
+                            <ResizableBox region={localRegions.latest} type="latest" color="border-blue-500" />
+                            <ResizableBox region={localRegions.history} type="history" color="border-green-500" />
                             {tempRegion && <div className="absolute border-4 border-dashed border-yellow-400 bg-yellow-400 bg-opacity-20 z-10" style={getRegionStyle(tempRegion)} />}
                         </div>
                     </div>
