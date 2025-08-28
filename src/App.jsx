@@ -80,10 +80,8 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialRegions }
     const overlayRef = useRef(null);
     const [setupStep, setSetupStep] = useState('drawingLatest');
     const [tempRegion, setTempRegion] = useState(null);
-    const [isDragging, setIsDragging] = useState(false);
     const [localRegions, setLocalRegions] = useState(initialRegions || { latest: null, history: null });
     
-    // State for resizing/moving
     const [action, setAction] = useState({ type: 'none' }); // none, drawing, resizing, moving
 
     useEffect(() => {
@@ -103,7 +101,6 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialRegions }
         const x = (e.clientX - rect.left) / rect.width * 100;
         const y = (e.clientY - rect.top) / rect.height * 100;
 
-        // If clicking on a handle, start resizing
         const handle = e.target.dataset.handle;
         const regionType = e.target.dataset.region;
         if (handle && regionType) {
@@ -111,7 +108,6 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialRegions }
             return;
         }
         
-        // If clicking inside a region, start moving
         for (const type of ['latest', 'history']) {
             const region = localRegions[type];
             if (region && x > region.x && x < region.x + region.width && y > region.y && y < region.y + region.height) {
@@ -120,7 +116,6 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialRegions }
             }
         }
         
-        // Otherwise, start drawing
         setAction({ type: 'drawing', startX: x, startY: y });
         setTempRegion({ x: x, y: y, width: 0, height: 0 });
     };
@@ -221,13 +216,6 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialRegions }
                     <div className="md:col-span-2 relative bg-gray-900 rounded-lg overflow-hidden w-full" style={{ paddingBottom: '56.25%' }}>
                         <video ref={videoRef} autoPlay muted className="absolute top-0 left-0 w-full h-full object-contain" />
                         <div ref={overlayRef} className="absolute inset-0 cursor-crosshair" onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}>
-                            {/* Instruction overlay */}
-                            {(setupStep === 'drawingLatest' || setupStep === 'drawingHistory') && (
-                                <div className="absolute inset-0 bg-black bg-opacity-80 flex flex-col items-center justify-center text-white p-4 text-center z-20 pointer-events-none">
-                                    <Icon name="MousePointerClick" size={48} className="mb-4 text-yellow-400" />
-                                    <h3 className="text-2xl font-bold mb-2">{setupStep === 'drawingLatest' ? 'Bước 1: Vẽ vùng [Kết quả mới]' : 'Bước 2: Vẽ vùng [Lịch sử]'}</h3>
-                                </div>
-                            )}
                             <ResizableBox region={localRegions.latest} type="latest" color="border-blue-500" />
                             <ResizableBox region={localRegions.history} type="history" color="border-green-500" />
                             {tempRegion && <div className="absolute border-4 border-dashed border-yellow-400 bg-yellow-400 bg-opacity-20 z-10" style={getRegionStyle(tempRegion)} />}
