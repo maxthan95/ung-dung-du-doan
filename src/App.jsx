@@ -23,7 +23,7 @@ const StatCard = ({ iconName, title, value, footer, color, children }) => (
     </div>
 );
 
-// --- NEW AI PREDICTION DISPLAY ---
+// --- AI PREDICTION DISPLAY ---
 
 const AIPredictionDisplay = ({ prediction, analysis, isAnalyzing }) => {
     if (isAnalyzing) {
@@ -79,9 +79,9 @@ const AIPredictionDisplay = ({ prediction, analysis, isAnalyzing }) => {
     );
 };
 
-// --- OTHER COMPONENTS (UNCHANGED) ---
+// --- UPDATED VISION ANALYZER ---
 
-const VisionAnalyzer = ({ onNewResult }) => {
+const VisionAnalyzer = ({ onNewResult, results }) => {
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
     const [isCapturing, setIsCapturing] = useState(false);
@@ -141,6 +141,17 @@ const VisionAnalyzer = ({ onNewResult }) => {
         }
         return () => clearInterval(intervalId);
     }, [isCapturing, analysisRegions, lastResult, onNewResult]);
+    
+    const getHistoryColor = (count) => {
+        switch(count) {
+            case 0: return 'bg-gray-400 text-white';
+            case 1: return 'bg-red-200 text-red-800';
+            case 2: return 'bg-yellow-300 text-yellow-800';
+            case 3: return 'bg-red-500 text-white';
+            case 4: return 'bg-red-700 text-white';
+            default: return 'bg-gray-200 text-gray-800';
+        }
+    }
 
     return (
         <div className="bg-white rounded-xl shadow-lg p-6 border-t-4 border-teal-500">
@@ -151,9 +162,19 @@ const VisionAnalyzer = ({ onNewResult }) => {
                     {isCapturing ? 'Dừng Ghi' : 'Bắt đầu Ghi'}
                 </button>
             </div>
-            <div className="relative bg-gray-200 rounded-lg overflow-hidden aspect-video">
+            {/* Live Result Area */}
+            <div className="relative bg-gray-200 rounded-lg overflow-hidden aspect-video mb-4">
                 <video ref={videoRef} autoPlay muted className="w-full h-full object-contain" />
                 <canvas ref={canvasRef} className="hidden" />
+                {isCapturing && (
+                    <div className="absolute inset-0">
+                        {analysisRegions.map((region, i) => (
+                            <div key={i} className="absolute w-4 h-4 -translate-x-1/2 -translate-y-1/2 border-2 border-white rounded-full flex items-center justify-center shadow-lg" style={{ left: `${region.x}%`, top: `${region.y}%` }}>
+                               <div className="w-1 h-1 bg-red-500 rounded-full"></div>
+                            </div>
+                        ))}
+                    </div>
+                )}
                 {!isCapturing && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500 p-4 text-center">
                         <Icon name="ScanEye" size={48} className="mb-2 opacity-50"/>
@@ -162,9 +183,23 @@ const VisionAnalyzer = ({ onNewResult }) => {
                     </div>
                 )}
             </div>
+            {/* History Area */}
+            <div>
+                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Lịch sử Gần đây</h4>
+                <div className="bg-gray-100 p-2 rounded-lg">
+                    <div className="grid grid-cols-5 gap-2">
+                        {results.slice(-15).map((result, index) => (
+                            <div key={`${result.flip}-${index}`} className={`flex items-center justify-center w-full h-8 rounded font-mono font-bold text-sm ${getHistoryColor(result.redCount)}`}>
+                                {result.redCount}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
         </div>
     );
 };
+
 
 const CompactHistoryItem = ({ result }) => (
     <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg text-sm">
@@ -232,7 +267,6 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [visualHistory, setVisualHistory] = useState(false);
   
-  // State for model performance
   const [modelPerformance, setModelPerformance] = useState(() => {
     try {
         const saved = localStorage.getItem('modelPerformance');
@@ -283,9 +317,8 @@ export default function App() {
     }));
   }, [theoreticalProbabilities, statistics]);
 
-  // --- NEW ADVANCED ANALYSIS AND PREDICTION ---
   const analyzeAndPredict = (currentResults) => {
-    if (currentResults.length < 10) { // Increased requirement for more data
+    if (currentResults.length < 10) {
       setPrediction(null);
       setAnalysis(null);
       return;
@@ -295,7 +328,6 @@ export default function App() {
     setTimeout(() => {
       const redCounts = currentResults.map(r => r.redCount);
 
-      // --- Prediction Models ---
       const models = {
         'Tần suất Tổng thể': (data) => {
             if (data.length === 0) return null;
@@ -337,21 +369,18 @@ export default function App() {
         },
       };
 
-      // --- Calculate Weights based on Performance ---
       const modelWeights = {};
       let totalWeight = 0;
       Object.keys(models).forEach(name => {
           const performance = modelPerformance[name] || [];
-          const accuracy = performance.length > 0 ? performance.filter(p => p.correct).length / performance.length : 0.5; // Default to 50%
+          const accuracy = performance.length > 0 ? performance.filter(p => p.correct).length / performance.length : 0.5;
           modelWeights[name] = accuracy;
           totalWeight += accuracy;
       });
-      // Normalize weights
       Object.keys(modelWeights).forEach(name => {
           modelWeights[name] = totalWeight > 0 ? modelWeights[name] / totalWeight : 1 / Object.keys(models).length;
       });
 
-      // --- Get Predictions and Apply Weights ---
       const allPredictions = {};
       const weightedVotes = {};
 
@@ -367,7 +396,8 @@ export default function App() {
       
       if (mostCommon !== null) {
         const finalPredictionValue = parseInt(mostCommon);
-        const confidence = Math.round((weightedVotes[mostCommon] / Object.values(weightedVotes).reduce((a,b)=>a+b,0)) * 100);
+        const totalVotes = Object.values(weightedVotes).reduce((a,b)=>a+b,0);
+        const confidence = totalVotes > 0 ? Math.round((weightedVotes[mostCommon] / totalVotes) * 100) : 0;
 
         setPrediction({ value: finalPredictionValue, confidence });
         
@@ -399,7 +429,6 @@ export default function App() {
   const addNewResult = (redCount, isFromVision = false) => {
     const redCounts = results.map(r => r.redCount);
     
-    // --- Update Model Performance ---
     const newPerformance = { ...modelPerformance };
     if (redCounts.length > 1) {
         const modelsToTest = {
@@ -416,7 +445,7 @@ export default function App() {
             if (predictionBefore !== null) {
                 if (!newPerformance[name]) newPerformance[name] = [];
                 newPerformance[name].push({ prediction: predictionBefore, correct: predictionBefore === redCount });
-                if (newPerformance[name].length > 20) newPerformance[name].shift(); // Keep last 20 results
+                if (newPerformance[name].length > 20) newPerformance[name].shift();
             }
         });
         setModelPerformance(newPerformance);
@@ -432,7 +461,7 @@ export default function App() {
             isFromVision: isFromVision,
             predictionAtFlip: prediction
         };
-        return [...prev, newResult].slice(-200); // Store more history
+        return [...prev, newResult].slice(-200);
     });
   };
   
@@ -472,7 +501,7 @@ export default function App() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-1 space-y-6">
-            <VisionAnalyzer onNewResult={(redCount) => addNewResult(redCount, true)} />
+            <VisionAnalyzer onNewResult={(redCount) => addNewResult(redCount, true)} results={results} />
             <div className="bg-white rounded-xl shadow-lg p-6">
                 <AIPredictionDisplay prediction={prediction} analysis={analysis} isAnalyzing={isAnalyzing} />
             </div>
