@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, Video, VideoOff, ScanEye, CheckCircle, XCircle, List, Grid, RotateCcw } from 'lucide-react';
+import { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, Video, VideoOff, ScanEye, CheckCircle, XCircle, List, Grid, RotateCcw, TrendingUp } from 'lucide-react';
+
+// --- HELPER COMPONENTS ---
 
 const Icon = ({ name, ...props }) => {
-    const icons = { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, Video, VideoOff, ScanEye, CheckCircle, XCircle, List, Grid, RotateCcw };
+    const icons = { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, Video, VideoOff, ScanEye, CheckCircle, XCircle, List, Grid, RotateCcw, TrendingUp };
     const LucideIcon = icons[name];
     return LucideIcon ? <LucideIcon {...props} /> : null;
 };
@@ -21,24 +23,29 @@ const StatCard = ({ iconName, title, value, footer, color, children }) => (
     </div>
 );
 
+// --- NEW AI PREDICTION DISPLAY ---
+
 const AIPredictionDisplay = ({ prediction, analysis, isAnalyzing }) => {
     if (isAnalyzing) {
-        return <div className="text-center py-8 text-gray-500">Đang phân tích...</div>;
+        return <div className="text-center py-8 text-gray-500">🧠 AI đang phân tích...</div>;
     }
     if (!prediction) {
         return <div className="text-center py-8 text-gray-500">Chưa đủ dữ liệu để dự đoán.</div>;
     }
     
     const methodIcons = {
-        'Tần suất cao nhất': 'PieChart',
-        'Chuỗi Markov': 'Link',
-        'Đảo ngược xu thế': 'ArrowRightLeft'
+        'Tần suất Tổng thể': 'PieChart',
+        'Tần suất Gần đây': 'PieChart',
+        'Chuỗi Markov (ngắn)': 'Link',
+        'Chuỗi Markov (dài)': 'Link',
+        'Đảo ngược Xu thế': 'ArrowRightLeft',
+        'Theo Xu hướng': 'TrendingUp',
     };
 
     return (
         <div>
             <div className="text-center mb-6">
-                <p className="text-sm text-gray-500">Dự đoán cho lần tiếp theo</p>
+                <p className="text-sm text-gray-500">Dự đoán Tối ưu</p>
                 <div className="text-6xl font-bold text-purple-600 my-2">{prediction.value} Đỏ</div>
                 <div className="flex items-center justify-center space-x-2 bg-green-100 text-green-700 px-3 py-1 rounded-full w-fit mx-auto">
                     <Icon name="Target" className="w-4 h-4" />
@@ -46,14 +53,22 @@ const AIPredictionDisplay = ({ prediction, analysis, isAnalyzing }) => {
                 </div>
             </div>
             <div className="space-y-3">
-                <h4 className="text-xs font-bold text-gray-500 uppercase">Lý do phân tích</h4>
+                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Phân tích Chi tiết từ các Mô hình</h4>
                 {analysis.methods.map(method => (
-                    <div key={method.name} className={`flex items-center justify-between p-3 rounded-lg ${method.agrees ? 'bg-purple-50 border border-purple-200' : 'bg-gray-50'}`}>
-                        <div className="flex items-center gap-3">
-                            <Icon name={methodIcons[method.name] || 'Brain'} className={`w-5 h-5 ${method.agrees ? 'text-purple-600' : 'text-gray-400'}`} />
-                            <span className="text-sm text-gray-700">{method.name}</span>
-                        </div>
-                        <div className={`text-sm font-bold ${method.agrees ? 'text-purple-600' : 'text-gray-500'}`}>{method.prediction !== null ? `${method.prediction} Đỏ` : 'N/A'}</div>
+                    <div key={method.name} className={`p-3 rounded-lg ${method.agrees ? 'bg-purple-50 border border-purple-200' : 'bg-gray-50'}`}>
+                       <div className="flex items-center justify-between">
+                           <div className="flex items-center gap-3">
+                                <Icon name={methodIcons[method.name] || 'Brain'} className={`w-5 h-5 ${method.agrees ? 'text-purple-600' : 'text-gray-400'}`} />
+                                <span className="text-sm text-gray-700 font-medium">{method.name}</span>
+                            </div>
+                            <div className={`text-sm font-bold ${method.agrees ? 'text-purple-600' : 'text-gray-500'}`}>{method.prediction !== null ? `${method.prediction} Đỏ` : 'N/A'}</div>
+                       </div>
+                       <div className="flex items-center gap-2 mt-2">
+                            <div className="text-xs text-gray-500 w-20">Độ hiệu quả:</div>
+                            <div className="w-full bg-gray-200 rounded-full h-1.5">
+                                <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${method.weight * 100}%` }}></div>
+                            </div>
+                       </div>
                     </div>
                 ))}
             </div>
@@ -63,6 +78,8 @@ const AIPredictionDisplay = ({ prediction, analysis, isAnalyzing }) => {
         </div>
     );
 };
+
+// --- OTHER COMPONENTS (UNCHANGED) ---
 
 const VisionAnalyzer = ({ onNewResult }) => {
     const videoRef = useRef(null);
@@ -108,18 +125,14 @@ const VisionAnalyzer = ({ onNewResult }) => {
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
                 let currentRedCount = 0;
-                const newRegions = analysisRegions.map(region => {
+                analysisRegions.forEach(region => {
                     const pixelX = Math.floor((region.x / 100) * canvas.width);
                     const pixelY = Math.floor((region.y / 100) * canvas.height);
                     const pixelData = ctx.getImageData(pixelX, pixelY, 1, 1).data;
                     const [r, g, b] = pixelData;
-                    
                     if (r > 150 && g < 100 && b < 100) currentRedCount++;
-                    return { ...region, color: `rgb(${r},${g},${b})` };
                 });
                 
-                setAnalysisRegions(newRegions);
-
                 if (lastResult === null || currentRedCount !== lastResult) {
                     setLastResult(currentRedCount);
                     if (lastResult !== null) onNewResult(currentRedCount);
@@ -141,15 +154,6 @@ const VisionAnalyzer = ({ onNewResult }) => {
             <div className="relative bg-gray-200 rounded-lg overflow-hidden aspect-video">
                 <video ref={videoRef} autoPlay muted className="w-full h-full object-contain" />
                 <canvas ref={canvasRef} className="hidden" />
-                {isCapturing && (
-                    <div className="absolute inset-0">
-                        {analysisRegions.map((region, i) => (
-                            <div key={i} className="absolute w-4 h-4 -translate-x-1/2 -translate-y-1/2 border-2 rounded-full flex items-center justify-center" style={{ left: `${region.x}%`, top: `${region.y}%`, borderColor: region.color || 'magenta' }}>
-                               <div className="w-1 h-1 bg-white rounded-full"></div>
-                            </div>
-                        ))}
-                    </div>
-                )}
                 {!isCapturing && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500 p-4 text-center">
                         <Icon name="ScanEye" size={48} className="mb-2 opacity-50"/>
@@ -212,12 +216,15 @@ const VisualHistoryItem = ({ result }) => (
     </div>
 );
 
+
+// --- MAIN APP COMPONENT ---
+
 export default function App() {
   const [results, setResults] = useState(() => {
     try {
-      const savedResults = localStorage.getItem('coinFlipHistory');
-      return savedResults ? JSON.parse(savedResults) : [];
-    } catch (error) { return []; }
+      const saved = localStorage.getItem('coinFlipHistory');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
   });
   const [prediction, setPrediction] = useState(null);
   const [analysis, setAnalysis] = useState(null);
@@ -225,6 +232,14 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [visualHistory, setVisualHistory] = useState(false);
   
+  // State for model performance
+  const [modelPerformance, setModelPerformance] = useState(() => {
+    try {
+        const saved = localStorage.getItem('modelPerformance');
+        return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  });
+
   const accuracyStats = useMemo(() => {
     const relevantResults = results.filter(r => r.predictionAtFlip);
     if (relevantResults.length === 0) return { correct: 0, total: 0, accuracy: 0 };
@@ -268,50 +283,93 @@ export default function App() {
     }));
   }, [theoreticalProbabilities, statistics]);
 
+  // --- NEW ADVANCED ANALYSIS AND PREDICTION ---
   const analyzeAndPredict = (currentResults) => {
-    if (currentResults.length < 5) {
+    if (currentResults.length < 10) { // Increased requirement for more data
       setPrediction(null);
       setAnalysis(null);
       return;
     }
     setIsAnalyzing(true);
+    
     setTimeout(() => {
       const redCounts = currentResults.map(r => r.redCount);
-      
-      const predictByFrequency = (data) => {
-          if (data.length === 0) return null;
-          const freq = data.reduce((acc, val) => ({ ...acc, [val]: (acc[val] || 0) + 1 }), {});
-          return parseInt(Object.keys(freq).reduce((a, b) => freq[a] > freq[b] ? a : b));
+
+      // --- Prediction Models ---
+      const models = {
+        'Tần suất Tổng thể': (data) => {
+            if (data.length === 0) return null;
+            const freq = data.reduce((acc, val) => ({ ...acc, [val]: (acc[val] || 0) + 1 }), {});
+            return parseInt(Object.keys(freq).reduce((a, b) => freq[a] > freq[b] ? a : b));
+        },
+        'Tần suất Gần đây': (data) => models['Tần suất Tổng thể'](data.slice(-20)),
+        'Chuỗi Markov (ngắn)': (data) => {
+            if (data.length < 2) return null;
+            const transitions = {};
+            for (let i = 0; i < data.length - 1; i++) {
+                const current = data[i]; const next = data[i + 1];
+                if (!transitions[current]) transitions[current] = {};
+                transitions[current][next] = (transitions[current][next] || 0) + 1;
+            }
+            const last = data[data.length - 1];
+            if (transitions[last]) return parseInt(Object.keys(transitions[last]).reduce((a, b) => transitions[last][a] > transitions[last][b] ? a : b));
+            return null;
+        },
+        'Chuỗi Markov (dài)': (data) => {
+            if (data.length < 3) return null;
+            const transitions = {};
+            for (let i = 0; i < data.length - 2; i++) {
+                const current = `${data[i]},${data[i+1]}`; const next = data[i + 2];
+                if (!transitions[current]) transitions[current] = {};
+                transitions[current][next] = (transitions[current][next] || 0) + 1;
+            }
+            const last = `${data[data.length-2]},${data[data.length-1]}`;
+            if (transitions[last]) return parseInt(Object.keys(transitions[last]).reduce((a, b) => transitions[last][a] > transitions[last][b] ? a : b));
+            return null;
+        },
+        'Đảo ngược Xu thế': (data) => 4 - data[data.length - 1],
+        'Theo Xu hướng': (data) => {
+            if (data.length < 3) return null;
+            const lastThree = data.slice(-3);
+            if (lastThree[2] > lastThree[1] && lastThree[1] > lastThree[0]) return Math.min(4, lastThree[2] + 1);
+            if (lastThree[2] < lastThree[1] && lastThree[1] < lastThree[0]) return Math.max(0, lastThree[2] - 1);
+            return null;
+        },
       };
 
-      const predictByMarkov = (data) => {
-        if (data.length < 2) return null;
-        const transitions = {};
-        for (let i = 0; i < data.length - 1; i++) {
-            if (!transitions[data[i]]) transitions[data[i]] = {};
-            transitions[data[i]][data[i+1]] = (transitions[data[i]][data[i+1]] || 0) + 1;
-        }
-        const last = data[data.length - 1];
-        if (transitions[last]) return parseInt(Object.keys(transitions[last]).reduce((a, b) => transitions[last][a] > transitions[last][b] ? a : b));
-        return null;
-      };
+      // --- Calculate Weights based on Performance ---
+      const modelWeights = {};
+      let totalWeight = 0;
+      Object.keys(models).forEach(name => {
+          const performance = modelPerformance[name] || [];
+          const accuracy = performance.length > 0 ? performance.filter(p => p.correct).length / performance.length : 0.5; // Default to 50%
+          modelWeights[name] = accuracy;
+          totalWeight += accuracy;
+      });
+      // Normalize weights
+      Object.keys(modelWeights).forEach(name => {
+          modelWeights[name] = totalWeight > 0 ? modelWeights[name] / totalWeight : 1 / Object.keys(models).length;
+      });
 
-      const allPredictions = {
-        'Tần suất cao nhất': predictByFrequency(redCounts),
-        'Chuỗi Markov': predictByMarkov(redCounts.slice(-20)),
-        'Đảo ngược xu thế': 4 - redCounts[redCounts.length - 1]
-      };
+      // --- Get Predictions and Apply Weights ---
+      const allPredictions = {};
+      const weightedVotes = {};
+
+      Object.keys(models).forEach(name => {
+          const prediction = models[name](redCounts);
+          allPredictions[name] = { prediction, weight: modelWeights[name] };
+          if (prediction !== null) {
+              weightedVotes[prediction] = (weightedVotes[prediction] || 0) + modelWeights[name];
+          }
+      });
       
-      const validPredictions = Object.values(allPredictions).filter(p => p !== null);
-      const counts = validPredictions.reduce((acc, p) => ({ ...acc, [p]: (acc[p] || 0) + 1 }), {});
-      const mostCommon = Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b, null);
+      const mostCommon = Object.keys(weightedVotes).reduce((a, b) => weightedVotes[a] > weightedVotes[b] ? a : b, null);
       
       if (mostCommon !== null) {
         const finalPredictionValue = parseInt(mostCommon);
-        setPrediction({
-          value: finalPredictionValue,
-          confidence: Math.round((counts[mostCommon] / validPredictions.length) * 100),
-        });
+        const confidence = Math.round((weightedVotes[mostCommon] / Object.values(weightedVotes).reduce((a,b)=>a+b,0)) * 100);
+
+        setPrediction({ value: finalPredictionValue, confidence });
         
         let commentary = '';
         const last5Avg = redCounts.slice(-5).reduce((a,b)=>a+b,0)/5;
@@ -320,17 +378,18 @@ export default function App() {
         if(last5Avg < overallAvg - 0.5) commentary = "Gần đây có xu hướng ra ít Đỏ hơn trung bình.";
 
         setAnalysis({
-            methods: Object.entries(allPredictions).map(([name, prediction]) => ({
+            methods: Object.entries(allPredictions).map(([name, {prediction, weight}]) => ({
                 name,
                 prediction,
-                agrees: prediction === finalPredictionValue
+                agrees: prediction === finalPredictionValue,
+                weight
             })),
             commentary
         });
       }
       
       setPatterns({
-        average: (currentResults.length > 0 ? redCounts.reduce((a, b) => a + b, 0) / redCounts.length : 0).toFixed(2),
+        average: (redCounts.length > 0 ? redCounts.reduce((a, b) => a + b, 0) / redCounts.length : 0).toFixed(2),
         recent: redCounts.slice(-5),
       });
       setIsAnalyzing(false);
@@ -338,6 +397,31 @@ export default function App() {
   };
 
   const addNewResult = (redCount, isFromVision = false) => {
+    const redCounts = results.map(r => r.redCount);
+    
+    // --- Update Model Performance ---
+    const newPerformance = { ...modelPerformance };
+    if (redCounts.length > 1) {
+        const modelsToTest = {
+            'Tần suất Tổng thể': (data) => data.length > 0 ? parseInt(Object.keys(data.reduce((acc, val) => ({ ...acc, [val]: (acc[val] || 0) + 1 }), {})).reduce((a, b) => data[a] > data[b] ? a : b)) : null,
+            'Tần suất Gần đây': (data) => modelsToTest['Tần suất Tổng thể'](data.slice(-20)),
+            'Chuỗi Markov (ngắn)': (data) => { if (data.length < 2) return null; const t = {}; for (let i = 0; i < data.length - 1; i++) { const c = data[i], n = data[i + 1]; if (!t[c]) t[c] = {}; t[c][n] = (t[c][n] || 0) + 1; } const l = data[data.length - 1]; if (t[l]) return parseInt(Object.keys(t[l]).reduce((a, b) => t[l][a] > t[l][b] ? a : b)); return null; },
+            'Chuỗi Markov (dài)': (data) => { if (data.length < 3) return null; const t = {}; for (let i = 0; i < data.length - 2; i++) { const c = `${data[i]},${data[i+1]}`, n = data[i + 2]; if (!t[c]) t[c] = {}; t[c][n] = (t[c][n] || 0) + 1; } const l = `${data[data.length-2]},${data[data.length-1]}`; if (t[l]) return parseInt(Object.keys(t[l]).reduce((a, b) => t[l][a] > t[l][b] ? a : b)); return null; },
+            'Đảo ngược Xu thế': (data) => 4 - data[data.length - 1],
+            'Theo Xu hướng': (data) => { if (data.length < 3) return null; const l = data.slice(-3); if (l[2] > l[1] && l[1] > l[0]) return Math.min(4, l[2] + 1); if (l[2] < l[1] && l[1] < l[0]) return Math.max(0, l[2] - 1); return null; },
+        };
+        
+        Object.keys(modelsToTest).forEach(name => {
+            const predictionBefore = modelsToTest[name](redCounts);
+            if (predictionBefore !== null) {
+                if (!newPerformance[name]) newPerformance[name] = [];
+                newPerformance[name].push({ prediction: predictionBefore, correct: predictionBefore === redCount });
+                if (newPerformance[name].length > 20) newPerformance[name].shift(); // Keep last 20 results
+            }
+        });
+        setModelPerformance(newPerformance);
+    }
+
     const outcome = Array(4).fill('Trắng').map((_, i) => i < redCount ? 'Đỏ' : 'Trắng');
     setResults(prev => {
         const newResult = {
@@ -345,27 +429,26 @@ export default function App() {
             outcome: outcome.join(', '),
             redCount: redCount,
             timestamp: new Date().toLocaleTimeString(),
-            isImported: !isFromVision,
             isFromVision: isFromVision,
             predictionAtFlip: prediction
         };
-        return [...prev, newResult].slice(-100);
+        return [...prev, newResult].slice(-200); // Store more history
     });
   };
   
   const resetResults = () => {
     if (window.confirm("Bạn có chắc chắn muốn xóa toàn bộ lịch sử không?")) {
-        setResults([]); setPrediction(null); setPatterns({});
+        setResults([]); setPrediction(null); setPatterns({}); setModelPerformance({});
         localStorage.removeItem('coinFlipHistory');
+        localStorage.removeItem('modelPerformance');
     }
   };
 
   useEffect(() => {
     localStorage.setItem('coinFlipHistory', JSON.stringify(results));
+    localStorage.setItem('modelPerformance', JSON.stringify(modelPerformance));
     analyzeAndPredict(results);
   }, [results]);
-
-  const flipCount = results.length;
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 md:p-6">
@@ -375,7 +458,7 @@ export default function App() {
             <div className="flex items-center space-x-3">
               <Icon name="Coins" className="w-10 h-10 text-red-600" />
               <div>
-                <h1 className="text-xl md:text-2xl font-bold text-gray-800">Trợ lý Dự đoán Xác suất</h1>
+                <h1 className="text-xl md:text-2xl font-bold text-gray-800">Trợ lý Dự đoán Thông minh</h1>
                 <p className="text-xs md:text-sm text-gray-500">Phân tích & Dự đoán kết quả 4 đồng xu</p>
               </div>
             </div>
