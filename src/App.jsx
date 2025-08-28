@@ -288,13 +288,18 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
 
     const [lastResult, setLastResult] = useState(null);
 
+    // UPDATED OCR LOGIC
     const recognizeDigit = (imageData) => {
         const data = imageData.data; let r = 0, g = 0, b = 0;
         for (let i = 0; i < data.length; i += 4) { r += data[i]; g += data[i + 1]; b += data[i + 2]; }
         const pixelCount = data.length / 4; r /= pixelCount; g /= pixelCount; b /= pixelCount;
-        if (r > 150 && g < 100 && b < 100) return 3; if (r > 150 && g > 100 && b < 100) return 2;
-        if (r < 100 && g < 100 && b < 100) return 4; if (r > 180 && g > 180 && b > 180) return 0;
-        return 1;
+        
+        if (r > 180 && g > 180 && b > 180) return 0; // White
+        if (b > r && b > g && b > 100) return 1;    // Blue
+        if (g > r && g > b && g > 100) return 2;    // Green
+        if (r > 150 && g > 120 && b < 100) return 3; // Yellow
+        if (r > 150 && g < 100 && b < 100) return 4; // Red
+        return null; // Undetermined
     };
 
     const startCapture = async () => {
@@ -335,7 +340,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                 const latestImageData = ctx.getImageData((r.x / 100) * canvas.width, (r.y / 100) * canvas.height, (r.width / 100) * canvas.width, (r.height / 100) * canvas.height);
                 const currentResult = recognizeDigit(latestImageData);
 
-                if (lastResult === null || currentResult !== lastResult) {
+                if (currentResult !== null && (lastResult === null || currentResult !== lastResult)) {
                     setLastResult(currentResult);
                     if (lastResult !== null) {
                         const h = settings.history;
@@ -348,7 +353,8 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                                 const x = (h.x / 100) * canvas.width + col * cellWidth;
                                 const y = (h.y / 100) * canvas.height + row * cellHeight;
                                 const itemImageData = ctx.getImageData(x, y, cellWidth, cellHeight);
-                                historyResults.push(recognizeDigit(itemImageData));
+                                const digit = recognizeDigit(itemImageData);
+                                if (digit !== null) historyResults.push(digit);
                             }
                         }
                         onVisionUpdate(currentResult, historyResults);
@@ -363,6 +369,18 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
         if (!region) return {};
         return { left: `${region.x}%`, top: `${region.y}%`, width: `${region.width}%`, height: `${region.height}%` };
     };
+    
+    // NEW COLOR FUNCTION
+    const getDisplayColor = (count) => {
+        switch(count) {
+            case 0: return 'bg-gray-200 text-gray-800'; // White
+            case 1: return 'bg-blue-500 text-white';   // Blue
+            case 2: return 'bg-green-500 text-white';  // Green
+            case 3: return 'bg-yellow-400 text-black'; // Yellow
+            case 4: return 'bg-red-500 text-white';    // Red
+            default: return 'bg-gray-200 text-gray-800';
+        }
+    }
 
     return (
         <div className="bg-white rounded-xl shadow-lg p-6 border-t-4 border-teal-500">
@@ -386,6 +404,19 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                 <div className="absolute inset-0">
                     {settings.latest && <div className="absolute border-2 border-blue-500" style={getRegionStyle(settings.latest)} />}
                     {settings.history && <div className="absolute border-2 border-green-500" style={getRegionStyle(settings.history)} />}
+                </div>
+            </div>
+            {/* NEW LATEST RESULTS DISPLAY */}
+            <div className="mt-4">
+                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">6 Kết quả Gần nhất (từ Vision)</h4>
+                <div className="bg-gray-100 p-2 rounded-lg">
+                    <div className="grid grid-cols-3 gap-2">
+                        {results.slice(-6).map((result, index) => (
+                            <div key={`${result.flip}-${index}`} className={`flex items-center justify-center w-full h-10 rounded font-mono font-bold text-lg ${getDisplayColor(result.redCount)}`}>
+                                {result.redCount}
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </div>
         </div>
