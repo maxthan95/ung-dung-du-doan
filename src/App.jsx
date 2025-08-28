@@ -74,7 +74,7 @@ const AIPredictionDisplay = ({ prediction, analysis, isAnalyzing }) => {
     );
 };
 
-// --- FINAL ADVANCED VISION ANALYZER (WITH GUIDED SETUP) ---
+// --- FINAL ADVANCED VISION ANALYZER (WITH GUIDED SETUP AND LARGER UI) ---
 
 const VisionAnalyzer = ({ onVisionUpdate, results }) => {
     const videoRef = useRef(null);
@@ -83,8 +83,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
     const [isCapturing, setIsCapturing] = useState(false);
     const [stream, setStream] = useState(null);
     
-    // State for setup and regions
-    const [setupStep, setSetupStep] = useState('idle'); // idle, drawingLatest, drawingHistory, complete
+    const [setupStep, setSetupStep] = useState('idle');
     const [tempRegion, setTempRegion] = useState(null);
     const [isDragging, setIsDragging] = useState(false);
     const [regions, setRegions] = useState(() => {
@@ -96,7 +95,6 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
 
     const [lastResult, setLastResult] = useState(null);
 
-    // OCR logic (unchanged)
     const recognizeDigit = (imageData) => {
         const data = imageData.data;
         let r = 0, g = 0, b = 0;
@@ -114,7 +112,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
             setStream(mediaStream);
             if (videoRef.current) videoRef.current.srcObject = mediaStream;
             setIsCapturing(true);
-            setSetupStep('drawingLatest'); // Start the setup process
+            setSetupStep('drawingLatest');
         } catch (err) { alert("Không thể bắt đầu ghi hình. Vui lòng cấp quyền."); }
     };
 
@@ -156,10 +154,10 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
         
         if (setupStep === 'drawingLatest') {
             setRegions(prev => ({ ...prev, latest: newRegion }));
-            setSetupStep('drawingHistory'); // Move to next step
+            setSetupStep('drawingHistory');
         } else if (setupStep === 'drawingHistory') {
             setRegions(prev => ({ ...prev, history: newRegion }));
-            setSetupStep('complete'); // Finish setup
+            setSetupStep('complete');
         }
         setTempRegion(null);
     };
@@ -236,7 +234,8 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                     {isCapturing ? 'Dừng Ghi' : 'Bắt đầu & Cài đặt'}
                 </button>
             </div>
-            <div className="relative bg-gray-200 rounded-lg overflow-hidden aspect-video mb-4">
+            {/* CHANGED: Removed aspect-video and added h-80 for a larger view */}
+            <div className="relative bg-gray-200 rounded-lg overflow-hidden h-80 mb-4">
                 <video ref={videoRef} autoPlay muted className="w-full h-full object-contain" />
                 <canvas ref={canvasRef} className="hidden" />
                 <div 
@@ -255,18 +254,6 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                 )}
             </div>
             {isCapturing && <button onClick={resetSetup} className="flex items-center justify-center gap-2 p-2 rounded-lg text-sm w-full bg-gray-200 hover:bg-gray-300 mb-4"><Icon name="Settings" size={16} /> Cài đặt lại Vùng</button>}
-            <div>
-                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Lịch sử Gần đây (từ Vision)</h4>
-                <div className="bg-gray-100 p-2 rounded-lg">
-                    <div className="grid grid-cols-5 gap-2">
-                        {results.slice(-15).map((result, index) => (
-                            <div key={`${result.flip}-${index}`} className={`flex items-center justify-center w-full h-8 rounded font-mono font-bold text-sm ${getHistoryColor(result.redCount)}`}>
-                                {result.redCount}
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </div>
         </div>
     );
 };
