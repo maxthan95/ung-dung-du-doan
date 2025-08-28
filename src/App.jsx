@@ -255,8 +255,9 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
             <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-teal-800">🔬 Phân tích Vision AI</h2>
                 <div className="flex items-center gap-2">
-                    <button onClick={() => setIsSettingsOpen(true)} disabled={!isCapturing} className="p-2 rounded-lg bg-gray-200 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed" title="Cài đặt khu vực">
+                    <button onClick={() => setIsSettingsOpen(true)} disabled={!isCapturing} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-white bg-yellow-500 hover:bg-yellow-600 disabled:opacity-50 disabled:cursor-not-allowed" title="Cài đặt khu vực">
                         <Icon name="Settings" size={16} />
+                        <span>Cài đặt</span>
                     </button>
                     <button onClick={isCapturing ? stopCapture : startCapture} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-white ${isCapturing ? 'bg-red-500 hover:bg-red-600' : 'bg-teal-500 hover:bg-teal-600'}`}>
                         {isCapturing ? <Icon name="VideoOff" size={16} /> : <Icon name="Video" size={16} />}
