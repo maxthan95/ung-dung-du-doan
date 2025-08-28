@@ -106,13 +106,18 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
         return 1;
     };
 
-    const startCaptureAndSetup = async () => {
+    const startCapture = async () => {
         try {
             const mediaStream = await navigator.mediaDevices.getDisplayMedia({ video: { cursor: "never" }, audio: false });
             setStream(mediaStream);
             if (videoRef.current) videoRef.current.srcObject = mediaStream;
             setIsCapturing(true);
-            setSetupStep('drawingLatest');
+            // If regions are already saved, go to complete, otherwise start setup
+            if (regions.latest && regions.history) {
+                setSetupStep('complete');
+            } else {
+                setSetupStep('drawingLatest');
+            }
         } catch (err) { alert("Không thể bắt đầu ghi hình. Vui lòng cấp quyền."); }
     };
 
@@ -164,10 +169,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
 
     useEffect(() => {
         localStorage.setItem('visionRegions', JSON.stringify(regions));
-        if (isCapturing && regions.latest && regions.history) {
-            setSetupStep('complete');
-        }
-    }, [regions, isCapturing]);
+    }, [regions]);
 
     useEffect(() => {
         let intervalId;
@@ -213,7 +215,6 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
     const getSetupInstructions = () => {
         if (setupStep === 'drawingLatest') return "Bước 1: Vẽ khu vực [Kết quả mới]";
         if (setupStep === 'drawingHistory') return "Bước 2: Vẽ khu vực [Lịch sử]";
-        if (setupStep === 'complete') return "Cài đặt hoàn tất! AI đang hoạt động.";
         return "";
     };
 
@@ -221,9 +222,9 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
         <div className="bg-white rounded-xl shadow-lg p-6 border-t-4 border-teal-500">
             <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-teal-800">🔬 Phân tích Vision AI</h2>
-                <button onClick={isCapturing ? stopCapture : startCaptureAndSetup} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-white ${isCapturing ? 'bg-red-500 hover:bg-red-600' : 'bg-teal-500 hover:bg-teal-600'}`}>
+                <button onClick={isCapturing ? stopCapture : startCapture} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-white ${isCapturing ? 'bg-red-500 hover:bg-red-600' : 'bg-teal-500 hover:bg-teal-600'}`}>
                     {isCapturing ? <Icon name="VideoOff" size={16} /> : <Icon name="Video" size={16} />}
-                    {isCapturing ? 'Dừng Ghi' : 'Bắt đầu & Cài đặt'}
+                    {isCapturing ? 'Dừng Ghi' : 'Bắt đầu Ghi'}
                 </button>
             </div>
             <div className="relative bg-gray-900 rounded-lg overflow-hidden w-full" style={{ paddingBottom: '56.25%' }}>
@@ -241,8 +242,8 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                         </div>
                     )}
 
-                    {regions.latest && <div className="absolute border-4 border-blue-500 z-10" style={getRegionStyle(regions.latest)}><span className="absolute -top-7 left-0 text-sm text-blue-500 bg-white px-2 py-0.5 rounded">Kết quả</span></div>}
-                    {regions.history && <div className="absolute border-4 border-green-500 z-10" style={getRegionStyle(regions.history)}><span className="absolute -top-7 left-0 text-sm text-green-500 bg-white px-2 py-0.5 rounded">Lịch sử</span></div>}
+                    {regions.latest && <div className="absolute border-4 border-blue-500 z-10" style={getRegionStyle(regions.latest)}><span className="absolute -top-7 left-0 text-sm text-blue-500 bg-white px-2 py-0-5 rounded">Kết quả</span></div>}
+                    {regions.history && <div className="absolute border-4 border-green-500 z-10" style={getRegionStyle(regions.history)}><span className="absolute -top-7 left-0 text-sm text-green-500 bg-white px-2 py-0-5 rounded">Lịch sử</span></div>}
                     {tempRegion && <div className="absolute border-4 border-dashed border-yellow-400 bg-yellow-400 bg-opacity-20 z-10" style={getRegionStyle(tempRegion)} />}
                 </div>
             </div>
