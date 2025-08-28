@@ -74,7 +74,7 @@ const AIPredictionDisplay = ({ prediction, analysis, isAnalyzing }) => {
     );
 };
 
-// --- NEW VISION SETTINGS MODAL (WITH REDRAW FUNCTIONALITY) ---
+// --- VISION SETTINGS MODAL (WITH REDRAW FUNCTIONALITY) ---
 const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialRegions }) => {
     const videoRef = useRef(null);
     const overlayRef = useRef(null);
@@ -373,16 +373,132 @@ export default function App() {
     
     setTimeout(() => {
       const redCounts = currentResults.map(r => r.redCount);
-      const models = { /* ... models logic ... */ };
-      // ... analysis logic ...
+      const models = {
+        'Tần suất Tổng thể': (data) => {
+            if (data.length === 0) return null;
+            const freq = data.reduce((acc, val) => ({ ...acc, [val]: (acc[val] || 0) + 1 }), {});
+            return parseInt(Object.keys(freq).reduce((a, b) => freq[a] > freq[b] ? a : b));
+        },
+        'Tần suất Gần đây': (data) => models['Tần suất Tổng thể'](data.slice(-20)),
+        'Chuỗi Markov (ngắn)': (data) => {
+            if (data.length < 2) return null;
+            const transitions = {};
+            for (let i = 0; i < data.length - 1; i++) {
+                const current = data[i]; const next = data[i + 1];
+                if (!transitions[current]) transitions[current] = {};
+                transitions[current][next] = (transitions[current][next] || 0) + 1;
+            }
+            const last = data[data.length - 1];
+            if (transitions[last]) return parseInt(Object.keys(transitions[last]).reduce((a, b) => transitions[last][a] > transitions[last][b] ? a : b));
+            return null;
+        },
+        'Chuỗi Markov (dài)': (data) => {
+            if (data.length < 3) return null;
+            const transitions = {};
+            for (let i = 0; i < data.length - 2; i++) {
+                const current = `${data[i]},${data[i+1]}`; const next = data[i + 2];
+                if (!transitions[current]) transitions[current] = {};
+                transitions[current][next] = (transitions[current][next] || 0) + 1;
+            }
+            const last = `${data[data.length-2]},${data[data.length-1]}`;
+            if (transitions[last]) return parseInt(Object.keys(transitions[last]).reduce((a, b) => transitions[last][a] > transitions[last][b] ? a : b));
+            return null;
+        },
+        'Đảo ngược Xu thế': (data) => 4 - data[data.length - 1],
+        'Theo Xu hướng': (data) => {
+            if (data.length < 3) return null;
+            const lastThree = data.slice(-3);
+            if (lastThree[2] > lastThree[1] && lastThree[1] > lastThree[0]) return Math.min(4, lastThree[2] + 1);
+            if (lastThree[2] < lastThree[1] && lastThree[1] < lastThree[0]) return Math.max(0, lastThree[2] - 1);
+            return null;
+        },
+      };
+
+      const modelWeights = {};
+      let totalWeight = 0;
+      Object.keys(models).forEach(name => {
+          const performance = modelPerformance[name] || [];
+          const accuracy = performance.length > 0 ? performance.filter(p => p.correct).length / performance.length : 0.5;
+          modelWeights[name] = accuracy;
+          totalWeight += accuracy;
+      });
+      Object.keys(modelWeights).forEach(name => {
+          modelWeights[name] = totalWeight > 0 ? modelWeights[name] / totalWeight : 1 / Object.keys(models).length;
+      });
+
+      const allPredictions = {};
+      const weightedVotes = {};
+
+      Object.keys(models).forEach(name => {
+          const prediction = models[name](redCounts);
+          allPredictions[name] = { prediction, weight: modelWeights[name] };
+          if (prediction !== null) {
+              weightedVotes[prediction] = (weightedVotes[prediction] || 0) + modelWeights[name];
+          }
+      });
+      
+      const mostCommon = Object.keys(weightedVotes).reduce((a, b) => weightedVotes[a] > weightedVotes[b] ? a : b, null);
+      
+      if (mostCommon !== null) {
+        const finalPredictionValue = parseInt(mostCommon);
+        const totalVotes = Object.values(weightedVotes).reduce((a,b)=>a+b,0);
+        const confidence = totalVotes > 0 ? Math.round((weightedVotes[mostCommon] / totalVotes) * 100) : 0;
+
+        setPrediction({ value: finalPredictionValue, confidence });
+        
+        let commentary = '';
+        const last5Avg = redCounts.slice(-5).reduce((a,b)=>a+b,0)/5;
+        const overallAvg = redCounts.length > 0 ? redCounts.reduce((a,b)=>a+b,0)/redCounts.length : 0;
+        if(last5Avg > overallAvg + 0.5) commentary = "Gần đây có xu hướng ra nhiều Đỏ hơn trung bình.";
+        if(last5Avg < overallAvg - 0.5) commentary = "Gần đây có xu hướng ra ít Đỏ hơn trung bình.";
+
+        setAnalysis({
+            methods: Object.entries(allPredictions).map(([name, {prediction, weight}]) => ({
+                name,
+                prediction,
+                agrees: prediction === finalPredictionValue,
+                weight
+            })),
+            commentary
+        });
+      }
+      
+      setPatterns({
+        average: (redCounts.length > 0 ? redCounts.reduce((a, b) => a + b, 0) / redCounts.length : 0).toFixed(2),
+        recent: redCounts.slice(-5),
+      });
       setIsAnalyzing(false);
     }, 500);
   };
 
   const handleVisionUpdate = (latestResult, historyResults) => {
+    const redCounts = results.map(r => r.redCount);
+    
+    const newPerformance = { ...modelPerformance };
+    if (redCounts.length > 1) {
+        const modelsToTest = {
+            'Tần suất Tổng thể': (data) => data.length > 0 ? parseInt(Object.keys(data.reduce((acc, val) => ({ ...acc, [val]: (acc[val] || 0) + 1 }), {})).reduce((a, b) => data[a] > data[b] ? a : b)) : null,
+            'Tần suất Gần đây': (data) => modelsToTest['Tần suất Tổng thể'](data.slice(-20)),
+            'Chuỗi Markov (ngắn)': (data) => { if (data.length < 2) return null; const t = {}; for (let i = 0; i < data.length - 1; i++) { const c = data[i], n = data[i + 1]; if (!t[c]) t[c] = {}; t[c][n] = (t[c][n] || 0) + 1; } const l = data[data.length - 1]; if (t[l]) return parseInt(Object.keys(t[l]).reduce((a, b) => t[l][a] > t[l][b] ? a : b)); return null; },
+            'Chuỗi Markov (dài)': (data) => { if (data.length < 3) return null; const t = {}; for (let i = 0; i < data.length - 2; i++) { const c = `${data[i]},${data[i+1]}`, n = data[i + 2]; if (!t[c]) t[c] = {}; t[c][n] = (t[c][n] || 0) + 1; } const l = `${data[data.length-2]},${data[data.length-1]}`; if (t[l]) return parseInt(Object.keys(t[l]).reduce((a, b) => t[l][a] > t[l][b] ? a : b)); return null; },
+            'Đảo ngược Xu thế': (data) => 4 - data[data.length - 1],
+            'Theo Xu hướng': (data) => { if (data.length < 3) return null; const l = data.slice(-3); if (l[2] > l[1] && l[1] > l[0]) return Math.min(4, l[2] + 1); if (l[2] < l[1] && l[1] < l[0]) return Math.max(0, l[2] - 1); return null; },
+        };
+        
+        Object.keys(modelsToTest).forEach(name => {
+            const predictionBefore = modelsToTest[name](redCounts);
+            if (predictionBefore !== null) {
+                if (!newPerformance[name]) newPerformance[name] = [];
+                newPerformance[name].push({ prediction: predictionBefore, correct: predictionBefore === latestResult });
+                if (newPerformance[name].length > 20) newPerformance[name].shift();
+            }
+        });
+        setModelPerformance(newPerformance);
+    }
+
     const newHistory = [...historyResults, latestResult];
     const newFullResults = newHistory.map((res, index) => ({
-        flip: (results.length - newHistory.length) + index + 1,
+        flip: index + 1,
         outcome: Array(4).fill('Trắng').map((_, i) => i < res ? 'Đỏ' : 'Trắng').join(', '),
         redCount: res,
         timestamp: new Date().toLocaleTimeString(),
