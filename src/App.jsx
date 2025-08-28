@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, Video, VideoOff, ScanEye, CheckCircle, XCircle, List, Grid, RotateCcw, TrendingUp, Settings, MousePointerClick, RefreshCw } from 'lucide-react';
+import { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, Video, VideoOff, ScanEye, CheckCircle, XCircle, List, Grid, RotateCcw, TrendingUp, Settings, MousePointerClick, RefreshCw, PlayCircle, PauseCircle } from 'lucide-react';
 
 // --- HELPER COMPONENTS ---
 
 const Icon = ({ name, ...props }) => {
-    const icons = { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, Video, VideoOff, ScanEye, CheckCircle, XCircle, List, Grid, RotateCcw, TrendingUp, Settings, MousePointerClick, RefreshCw };
+    const icons = { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, Video, VideoOff, ScanEye, CheckCircle, XCircle, List, Grid, RotateCcw, TrendingUp, Settings, MousePointerClick, RefreshCw, PlayCircle, PauseCircle };
     const LucideIcon = icons[name];
     return LucideIcon ? <LucideIcon {...props} /> : null;
 };
@@ -23,58 +23,72 @@ const StatCard = ({ iconName, title, value, footer, color, children }) => (
     </div>
 );
 
-const AIPredictionDisplay = ({ prediction, analysis, isAnalyzing }) => {
-    if (isAnalyzing) {
-        return <div className="text-center py-8 text-gray-500">🧠 AI đang phân tích...</div>;
+const AIPredictionDisplay = ({ prediction, analysis, isAnalyzing, isPredictionRunning, onTogglePrediction }) => {
+    let content;
+    if (!isPredictionRunning) {
+        content = <div className="text-center py-8 text-gray-500">Dự đoán đã tạm dừng.</div>;
+    } else if (isAnalyzing) {
+        content = <div className="text-center py-8 text-gray-500">🧠 AI đang phân tích...</div>;
+    } else if (!prediction) {
+        content = <div className="text-center py-8 text-gray-500">Chưa đủ dữ liệu để dự đoán.</div>;
+    } else {
+        const methodIcons = {
+            'Tần suất Tổng thể': 'PieChart', 'Tần suất Gần đây': 'PieChart',
+            'Chuỗi Markov (ngắn)': 'Link', 'Chuỗi Markov (dài)': 'Link',
+            'Đảo ngược Xu thế': 'ArrowRightLeft', 'Theo Xu hướng': 'TrendingUp',
+        };
+        content = (
+            <div>
+                <div className="text-center mb-6">
+                    <p className="text-sm text-gray-500">Dự đoán Tối ưu</p>
+                    <div className="text-6xl font-bold text-purple-600 my-2">{prediction.value} Đỏ</div>
+                    <div className="flex items-center justify-center space-x-2 bg-green-100 text-green-700 px-3 py-1 rounded-full w-fit mx-auto">
+                        <Icon name="Target" className="w-4 h-4" />
+                        <span className="text-sm font-medium">Độ tin cậy: {prediction.confidence}%</span>
+                    </div>
+                </div>
+                <div className="space-y-3">
+                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Phân tích Chi tiết từ các Mô hình</h4>
+                    {analysis.methods.map(method => (
+                        <div key={method.name} className={`p-3 rounded-lg ${method.agrees ? 'bg-purple-50 border border-purple-200' : 'bg-gray-50'}`}>
+                           <div className="flex items-center justify-between">
+                               <div className="flex items-center gap-3">
+                                    <Icon name={methodIcons[method.name] || 'Brain'} className={`w-5 h-5 ${method.agrees ? 'text-purple-600' : 'text-gray-400'}`} />
+                                    <span className="text-sm text-gray-700 font-medium">{method.name}</span>
+                                </div>
+                                <div className={`text-sm font-bold ${method.agrees ? 'text-purple-600' : 'text-gray-500'}`}>{method.prediction !== null ? `${method.prediction} Đỏ` : 'N/A'}</div>
+                           </div>
+                           <div className="flex items-center gap-2 mt-2">
+                                <div className="text-xs text-gray-500 w-20">Độ hiệu quả:</div>
+                                <div className="w-full bg-gray-200 rounded-full h-1.5">
+                                    <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${method.weight * 100}%` }}></div>
+                                </div>
+                           </div>
+                        </div>
+                    ))}
+                </div>
+                {analysis.commentary && (
+                    <p className="mt-4 text-xs text-center text-gray-600 bg-gray-100 p-3 rounded-lg">{analysis.commentary}</p>
+                )}
+            </div>
+        );
     }
-    if (!prediction) {
-        return <div className="text-center py-8 text-gray-500">Chưa đủ dữ liệu để dự đoán.</div>;
-    }
-    
-    const methodIcons = {
-        'Tần suất Tổng thể': 'PieChart', 'Tần suất Gần đây': 'PieChart',
-        'Chuỗi Markov (ngắn)': 'Link', 'Chuỗi Markov (dài)': 'Link',
-        'Đảo ngược Xu thế': 'ArrowRightLeft', 'Theo Xu hướng': 'TrendingUp',
-    };
 
     return (
-        <div>
-            <div className="text-center mb-6">
-                <p className="text-sm text-gray-500">Dự đoán Tối ưu</p>
-                <div className="text-6xl font-bold text-purple-600 my-2">{prediction.value} Đỏ</div>
-                <div className="flex items-center justify-center space-x-2 bg-green-100 text-green-700 px-3 py-1 rounded-full w-fit mx-auto">
-                    <Icon name="Target" className="w-4 h-4" />
-                    <span className="text-sm font-medium">Độ tin cậy: {prediction.confidence}%</span>
-                </div>
+        <div className="bg-white rounded-xl shadow-lg p-6">
+            <div className="flex items-center justify-between mb-4">
+                 <h2 className="text-lg font-semibold text-purple-800">🔮 Dự Đoán AI</h2>
+                 <button onClick={onTogglePrediction} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-white ${isPredictionRunning ? 'bg-orange-500 hover:bg-orange-600' : 'bg-green-500 hover:bg-green-600'}`}>
+                    {isPredictionRunning ? <Icon name="PauseCircle" size={16} /> : <Icon name="PlayCircle" size={16} />}
+                    <span>{isPredictionRunning ? 'Dừng' : 'Bắt đầu'}</span>
+                </button>
             </div>
-            <div className="space-y-3">
-                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Phân tích Chi tiết từ các Mô hình</h4>
-                {analysis.methods.map(method => (
-                    <div key={method.name} className={`p-3 rounded-lg ${method.agrees ? 'bg-purple-50 border border-purple-200' : 'bg-gray-50'}`}>
-                       <div className="flex items-center justify-between">
-                           <div className="flex items-center gap-3">
-                                <Icon name={methodIcons[method.name] || 'Brain'} className={`w-5 h-5 ${method.agrees ? 'text-purple-600' : 'text-gray-400'}`} />
-                                <span className="text-sm text-gray-700 font-medium">{method.name}</span>
-                            </div>
-                            <div className={`text-sm font-bold ${method.agrees ? 'text-purple-600' : 'text-gray-500'}`}>{method.prediction !== null ? `${method.prediction} Đỏ` : 'N/A'}</div>
-                       </div>
-                       <div className="flex items-center gap-2 mt-2">
-                            <div className="text-xs text-gray-500 w-20">Độ hiệu quả:</div>
-                            <div className="w-full bg-gray-200 rounded-full h-1.5">
-                                <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${method.weight * 100}%` }}></div>
-                            </div>
-                       </div>
-                    </div>
-                ))}
-            </div>
-            {analysis.commentary && (
-                <p className="mt-4 text-xs text-center text-gray-600 bg-gray-100 p-3 rounded-lg">{analysis.commentary}</p>
-            )}
+            {content}
         </div>
     );
 };
 
-// --- NEW VISION SETTINGS MODAL (WITH RESIZABLE REGIONS) ---
+// --- VISION SETTINGS MODAL (WITH RESIZABLE REGIONS) ---
 const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialRegions }) => {
     const videoRef = useRef(null);
     const overlayRef = useRef(null);
@@ -82,7 +96,7 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialRegions }
     const [tempRegion, setTempRegion] = useState(null);
     const [localRegions, setLocalRegions] = useState(initialRegions || { latest: null, history: null });
     
-    const [action, setAction] = useState({ type: 'none' }); // none, drawing, resizing, moving
+    const [action, setAction] = useState({ type: 'none' });
 
     useEffect(() => {
         if (isOpen && stream && videoRef.current) {
@@ -216,7 +230,6 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialRegions }
                     <div className="md:col-span-2 relative bg-gray-900 rounded-lg overflow-hidden w-full" style={{ paddingBottom: '56.25%' }}>
                         <video ref={videoRef} autoPlay muted className="absolute top-0 left-0 w-full h-full object-contain" />
                         <div ref={overlayRef} className="absolute inset-0 cursor-crosshair" onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}>
-                            {/* FIXED: Added pointer-events-none to the instruction overlay */}
                             <div className="absolute inset-0 bg-black bg-opacity-80 flex flex-col items-center justify-center text-white p-4 text-center z-20 pointer-events-none">
                                 <Icon name="Settings" size={48} className="mb-4 text-yellow-400" />
                                 <h3 className="text-2xl font-bold mb-2">Cài đặt Vùng quét</h3>
@@ -381,6 +394,7 @@ export default function App() {
   const [patterns, setPatterns] = useState({});
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [visualHistory, setVisualHistory] = useState(false);
+  const [isPredictionRunning, setIsPredictionRunning] = useState(true);
   
   const [modelPerformance, setModelPerformance] = useState(() => {
     try {
@@ -588,8 +602,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('coinFlipHistory', JSON.stringify(results));
     localStorage.setItem('modelPerformance', JSON.stringify(modelPerformance));
-    analyzeAndPredict(results);
-  }, [results]);
+    if (isPredictionRunning) {
+        analyzeAndPredict(results);
+    }
+  }, [results, isPredictionRunning]);
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 md:p-6">
@@ -617,9 +633,7 @@ export default function App() {
           </div>
 
           <div className="lg:col-span-1 space-y-6">
-            <div className="bg-white rounded-xl shadow-lg p-6">
-                <AIPredictionDisplay prediction={prediction} analysis={analysis} isAnalyzing={isAnalyzing} />
-            </div>
+            <AIPredictionDisplay prediction={prediction} analysis={analysis} isAnalyzing={isAnalyzing} isPredictionRunning={isPredictionRunning} onTogglePrediction={() => setIsPredictionRunning(p => !p)} />
             <StatCard iconName="Target" title="Độ chính xác AI" value={`${accuracyStats.accuracy.toFixed(1)}%`} footer={`${accuracyStats.correct}/${accuracyStats.total} đúng`} color="border-green-500" />
             <StatCard iconName="Sigma" title="Trung bình (Đỏ/lần)" value={patterns.average || '0.00'} footer="Dựa trên toàn bộ lịch sử" color="border-blue-500" />
             <StatCard iconName="History" title="5 lần gần nhất" value="" color="border-yellow-500">
