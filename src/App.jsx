@@ -74,7 +74,6 @@ const AIPredictionDisplay = ({ prediction, analysis, isAnalyzing }) => {
     );
 };
 
-// --- NEW VISION SETTINGS MODAL ---
 const VisionSettingsModal = ({ isOpen, onClose, onSave, stream }) => {
     const videoRef = useRef(null);
     const overlayRef = useRef(null);
@@ -162,7 +161,6 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream }) => {
     );
 };
 
-// --- VISION ANALYZER COMPONENT ---
 const VisionAnalyzer = ({ onVisionUpdate, results }) => {
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
@@ -277,7 +275,55 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
     );
 };
 
-// --- MAIN APP COMPONENT ---
+const CompactHistoryItem = ({ result }) => (
+    <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg text-sm">
+        <div className="flex items-center gap-3">
+            <span className="font-medium text-gray-600">#{result.flip}</span>
+            <div className="flex gap-1">
+                {result.outcome.split(', ').map((coin, i) => (
+                    <div key={i} className={`w-5 h-5 rounded-full ${coin === 'Đỏ' ? 'bg-red-500' : 'bg-gray-300'}`} />
+                ))}
+            </div>
+            <span className="font-bold text-blue-600">{result.redCount} Đỏ</span>
+        </div>
+        <div className="flex items-center gap-3 text-xs text-gray-500">
+            {result.predictionAtFlip && (
+                <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full ${result.redCount === result.predictionAtFlip.value ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                    {result.redCount === result.predictionAtFlip.value ? <Icon name="CheckCircle" size={12}/> : <Icon name="XCircle" size={12}/>}
+                    <span>Dự đoán: {result.predictionAtFlip.value}</span>
+                </div>
+            )}
+            {result.isFromVision && <Icon name="ScanEye" size={12} className="text-purple-500" title="Kết quả từ Vision AI"/>}
+            <span>{result.timestamp}</span>
+        </div>
+    </div>
+);
+
+const VisualHistoryItem = ({ result }) => (
+    <div className="flex items-center justify-between p-3 bg-gray-100 rounded-lg mb-2 shadow-sm">
+        <div className="flex items-center gap-4">
+            <span className="font-bold text-gray-700 text-base w-10 text-center">#{result.flip}</span>
+            <div className="flex gap-2">
+                {result.outcome.split(', ').map((coin, i) => (
+                    <div key={i} className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold shadow-inner ${coin === 'Đỏ' ? 'bg-red-500 text-white' : 'bg-gray-300 text-gray-700'}`}>
+                        {coin === 'Đỏ' ? 'ĐỎ' : 'TRẮNG'}
+                    </div>
+                ))}
+            </div>
+        </div>
+        <div className="flex flex-col items-end gap-1 text-xs text-gray-500">
+            <div className="font-bold text-lg text-blue-600">{result.redCount} Đỏ</div>
+            {result.predictionAtFlip && (
+                <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full ${result.redCount === result.predictionAtFlip.value ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                    {result.redCount === result.predictionAtFlip.value ? <Icon name="CheckCircle" size={12}/> : <Icon name="XCircle" size={12}/>}
+                    <span>Dự đoán: {result.predictionAtFlip.value}</span>
+                </div>
+            )}
+            {result.isFromVision && <Icon name="ScanEye" size={12} className="text-purple-500" title="Kết quả từ Vision AI"/>}
+            <span>{result.timestamp}</span>
+        </div>
+    </div>
+);
 
 export default function App() {
   const [results, setResults] = useState(() => {
