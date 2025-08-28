@@ -216,6 +216,12 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialRegions }
                     <div className="md:col-span-2 relative bg-gray-900 rounded-lg overflow-hidden w-full" style={{ paddingBottom: '56.25%' }}>
                         <video ref={videoRef} autoPlay muted className="absolute top-0 left-0 w-full h-full object-contain" />
                         <div ref={overlayRef} className="absolute inset-0 cursor-crosshair" onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}>
+                            {/* FIXED: Added pointer-events-none to the instruction overlay */}
+                            <div className="absolute inset-0 bg-black bg-opacity-80 flex flex-col items-center justify-center text-white p-4 text-center z-20 pointer-events-none">
+                                <Icon name="Settings" size={48} className="mb-4 text-yellow-400" />
+                                <h3 className="text-2xl font-bold mb-2">Cài đặt Vùng quét</h3>
+                                <p className="mb-6">Hãy thực hiện 2 bước để AI biết cần nhìn vào đâu.</p>
+                            </div>
                             <ResizableBox region={localRegions.latest} type="latest" color="border-blue-500" />
                             <ResizableBox region={localRegions.history} type="history" color="border-green-500" />
                             {tempRegion && <div className="absolute border-4 border-dashed border-yellow-400 bg-yellow-400 bg-opacity-20 z-10" style={getRegionStyle(tempRegion)} />}
