@@ -164,10 +164,10 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
 
     useEffect(() => {
         localStorage.setItem('visionRegions', JSON.stringify(regions));
-        if (regions.latest && regions.history) {
+        if (isCapturing && regions.latest && regions.history) {
             setSetupStep('complete');
         }
-    }, [regions]);
+    }, [regions, isCapturing]);
 
     useEffect(() => {
         let intervalId;
@@ -226,25 +226,24 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                     {isCapturing ? 'Dừng Ghi' : 'Bắt đầu & Cài đặt'}
                 </button>
             </div>
-            <div className="relative bg-gray-900 rounded-lg overflow-hidden w-full" style={{ paddingBottom: '56.25%' /* 16:9 Aspect Ratio */ }}>
+            <div className="relative bg-gray-900 rounded-lg overflow-hidden w-full" style={{ paddingBottom: '56.25%' }}>
                 <video ref={videoRef} autoPlay muted className="absolute top-0 left-0 w-full h-full object-contain" />
                 <canvas ref={canvasRef} className="hidden" />
                 <div 
                     ref={overlayRef} className={`absolute inset-0 ${(setupStep === 'drawingLatest' || setupStep === 'drawingHistory') ? 'cursor-crosshair' : ''}`}
                     onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}
                 >
-                    {/* Setup overlay */}
                     {(setupStep === 'drawingLatest' || setupStep === 'drawingHistory') && (
-                        <div className="absolute inset-0 bg-black bg-opacity-70 flex flex-col items-center justify-center text-white p-4 text-center">
+                        <div className="absolute inset-0 bg-black bg-opacity-70 flex flex-col items-center justify-center text-white p-4 text-center z-20">
                              <Icon name="MousePointerClick" size={48} className="mb-4 text-yellow-400" />
                              <h3 className="text-xl font-bold mb-2">{getSetupInstructions()}</h3>
                              <p className="text-sm">Nhấn và kéo chuột trên màn hình để chọn vùng.</p>
                         </div>
                     )}
 
-                    {regions.latest && <div className="absolute border-4 border-blue-500" style={getRegionStyle(regions.latest)}><span className="absolute -top-7 left-0 text-sm text-blue-500 bg-white px-2 py-0.5 rounded">Kết quả</span></div>}
-                    {regions.history && <div className="absolute border-4 border-green-500" style={getRegionStyle(regions.history)}><span className="absolute -top-7 left-0 text-sm text-green-500 bg-white px-2 py-0.5 rounded">Lịch sử</span></div>}
-                    {tempRegion && <div className="absolute border-4 border-dashed border-yellow-400 bg-yellow-400 bg-opacity-20" style={getRegionStyle(tempRegion)} />}
+                    {regions.latest && <div className="absolute border-4 border-blue-500 z-10" style={getRegionStyle(regions.latest)}><span className="absolute -top-7 left-0 text-sm text-blue-500 bg-white px-2 py-0.5 rounded">Kết quả</span></div>}
+                    {regions.history && <div className="absolute border-4 border-green-500 z-10" style={getRegionStyle(regions.history)}><span className="absolute -top-7 left-0 text-sm text-green-500 bg-white px-2 py-0.5 rounded">Lịch sử</span></div>}
+                    {tempRegion && <div className="absolute border-4 border-dashed border-yellow-400 bg-yellow-400 bg-opacity-20 z-10" style={getRegionStyle(tempRegion)} />}
                 </div>
             </div>
             {isCapturing && <button onClick={resetSetup} className="flex items-center justify-center gap-2 p-2 rounded-lg text-sm w-full bg-gray-200 hover:bg-gray-300 mt-4"><Icon name="Settings" size={16} /> Cài đặt lại Vùng</button>}
@@ -381,7 +380,6 @@ export default function App() {
           </div>
         </header>
 
-        {/* CHANGED: Swapped column spans */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
             <VisionAnalyzer onVisionUpdate={handleVisionUpdate} results={results} />
