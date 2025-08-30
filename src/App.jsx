@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, Video, VideoOff, ScanEye, CheckCircle, XCircle, List, Grid, RotateCcw, TrendingUp, Settings, MousePointerClick, RefreshCw, PlayCircle, PauseCircle } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { Dices, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, Video, VideoOff, ScanEye, CheckCircle, XCircle, List, Grid, RotateCcw, TrendingUp, Settings, MousePointerClick, RefreshCw, PlayCircle, PauseCircle } from 'lucide-react';
 
 // --- HELPER COMPONENTS ---
 
 const Icon = ({ name, ...props }) => {
-    const icons = { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, Video, VideoOff, ScanEye, CheckCircle, XCircle, List, Grid, RotateCcw, TrendingUp, Settings, MousePointerClick, RefreshCw, PlayCircle, PauseCircle };
+    const icons = { Dices, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, Video, VideoOff, ScanEye, CheckCircle, XCircle, List, Grid, RotateCcw, TrendingUp, Settings, MousePointerClick, RefreshCw, PlayCircle, PauseCircle };
     const LucideIcon = icons[name];
     return LucideIcon ? <LucideIcon {...props} /> : null;
 };
@@ -35,13 +35,14 @@ const AIPredictionDisplay = ({ prediction, analysis, isAnalyzing, isPredictionRu
         const methodIcons = {
             'Tần suất Tổng thể': 'PieChart', 'Tần suất Gần đây': 'PieChart',
             'Chuỗi Markov (ngắn)': 'Link', 'Chuỗi Markov (dài)': 'Link',
-            'Đảo ngược Xu thế': 'ArrowRightLeft', 'Theo Xu hướng': 'TrendingUp',
+            'Theo Bệt': 'TrendingUp', 'Bẻ Bệt': 'ArrowRightLeft',
         };
+        const isTai = prediction.value === 'Tài';
         content = (
             <div>
                 <div className="text-center mb-6">
                     <p className="text-sm text-gray-500">Dự đoán Tối ưu</p>
-                    <div className="text-6xl font-bold text-purple-600 my-2">{prediction.value} Đỏ</div>
+                    <div className={`text-6xl font-bold my-2 ${isTai ? 'text-blue-600' : 'text-red-600'}`}>{prediction.value.toUpperCase()}</div>
                     <div className="flex items-center justify-center space-x-2 bg-green-100 text-green-700 px-3 py-1 rounded-full w-fit mx-auto">
                         <Icon name="Target" className="w-4 h-4" />
                         <span className="text-sm font-medium">Độ tin cậy: {prediction.confidence}%</span>
@@ -56,7 +57,7 @@ const AIPredictionDisplay = ({ prediction, analysis, isAnalyzing, isPredictionRu
                                     <Icon name={methodIcons[method.name] || 'Brain'} className={`w-5 h-5 ${method.agrees ? 'text-purple-600' : 'text-gray-400'}`} />
                                     <span className="text-sm text-gray-700 font-medium">{method.name}</span>
                                 </div>
-                                <div className={`text-sm font-bold ${method.agrees ? 'text-purple-600' : 'text-gray-500'}`}>{method.prediction !== null ? `${method.prediction} Đỏ` : 'N/A'}</div>
+                                <div className={`text-sm font-bold ${method.agrees ? 'text-purple-600' : 'text-gray-500'}`}>{method.prediction || 'N/A'}</div>
                            </div>
                            <div className="flex items-center gap-2 mt-2">
                                 <div className="text-xs text-gray-500 w-20">Độ hiệu quả:</div>
@@ -67,9 +68,6 @@ const AIPredictionDisplay = ({ prediction, analysis, isAnalyzing, isPredictionRu
                         </div>
                     ))}
                 </div>
-                {analysis.commentary && (
-                    <p className="mt-4 text-xs text-center text-gray-600 bg-gray-100 p-3 rounded-lg">{analysis.commentary}</p>
-                )}
             </div>
         );
     }
@@ -88,13 +86,13 @@ const AIPredictionDisplay = ({ prediction, analysis, isAnalyzing, isPredictionRu
     );
 };
 
-// --- NEW VISION SETTINGS MODAL (WITH GRID SETUP) ---
+// --- VISION SETTINGS MODAL (WITH GRID SETUP) ---
 const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialSettings }) => {
     const videoRef = useRef(null);
     const overlayRef = useRef(null);
     const [setupStep, setSetupStep] = useState('drawingLatest');
     const [tempRegion, setTempRegion] = useState(null);
-    const [localSettings, setLocalSettings] = useState(initialSettings || { latest: null, history: null, rows: 3, cols: 5 });
+    const [localSettings, setLocalSettings] = useState(initialSettings || { latest: null, history: null, rows: 10, cols: 10 });
     
     const [action, setAction] = useState({ type: 'none' });
 
@@ -103,7 +101,7 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialSettings 
             videoRef.current.srcObject = stream;
         }
         if (isOpen) {
-            setLocalSettings(initialSettings || { latest: null, history: null, rows: 3, cols: 5 });
+            setLocalSettings(initialSettings || { latest: null, history: null, rows: 10, cols: 10 });
             setSetupStep('drawingLatest');
         }
     }, [isOpen, stream, initialSettings]);
@@ -237,25 +235,26 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialSettings 
                     <div className="md:col-span-2 relative bg-gray-900 rounded-lg overflow-hidden w-full" style={{ paddingBottom: '56.25%' }}>
                         <video ref={videoRef} autoPlay muted className="absolute top-0 left-0 w-full h-full object-contain" />
                         <div ref={overlayRef} className="absolute inset-0 cursor-crosshair" onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}>
-                            <ResizableBox region={localSettings.latest} type="latest" color="border-blue-500" />
-                            <ResizableBox region={localSettings.history} type="history" color="border-green-500" grid={{rows: localSettings.rows, cols: localSettings.cols}} />
-                            {tempRegion && <div className="absolute border-4 border-dashed border-yellow-400 bg-yellow-400 bg-opacity-20 z-10" style={getRegionStyle(tempRegion)} />}
+                            <ResizableBox region={localSettings.latest} type="latest" color="border-yellow-400" />
+                            <ResizableBox region={localSettings.history} type="history" color="border-purple-400" grid={{rows: localSettings.rows, cols: localSettings.cols}} />
+                            {tempRegion && <div className="absolute border-4 border-dashed border-white bg-white bg-opacity-20 z-10" style={getRegionStyle(tempRegion)} />}
                         </div>
                     </div>
                     <div className="flex flex-col justify-center space-y-4">
                         <h3 className="font-bold text-gray-700">Hướng dẫn:</h3>
-                        <div className={`p-4 rounded-lg border-2 ${setupStep === 'drawingLatest' ? 'border-yellow-400' : 'border-gray-600'} ${localSettings.latest ? 'bg-green-500/10' : 'bg-gray-100'}`}>
+                        <div className={`p-4 rounded-lg border-2 ${setupStep === 'drawingLatest' ? 'border-yellow-400' : 'border-gray-200'} ${localSettings.latest ? 'bg-green-50' : 'bg-gray-50'}`}>
                             <div className="flex justify-between items-center">
-                                <h4 className="font-bold flex items-center gap-2">{localSettings.latest ? <Icon name="CheckCircle" className="text-green-600" /> : 'Bước 1:'} Vẽ vùng [Kết quả]</h4>
+                                <h4 className="font-bold flex items-center gap-2">{localSettings.latest ? <Icon name="CheckCircle" className="text-green-600" /> : 'Bước 1:'} Vẽ vùng [Kết quả mới]</h4>
                                 {localSettings.latest && <button onClick={() => handleRedraw('latest')} className="p-1 hover:bg-gray-200 rounded"><Icon name="RefreshCw" size={14} /></button>}
                             </div>
                         </div>
-                        <div className={`p-4 rounded-lg border-2 ${setupStep === 'drawingHistory' ? 'border-yellow-400' : 'border-gray-600'} ${localSettings.history ? 'bg-green-500/10' : 'bg-gray-100'}`}>
+                        <div className={`p-4 rounded-lg border-2 ${setupStep === 'drawingHistory' ? 'border-yellow-400' : 'border-gray-200'} ${localSettings.history ? 'bg-green-50' : 'bg-gray-50'}`}>
                             <div className="flex justify-between items-center">
                                 <h4 className="font-bold flex items-center gap-2">{localSettings.history ? <Icon name="CheckCircle" className="text-green-600" /> : 'Bước 2:'} Vẽ vùng [Lịch sử]</h4>
                                 {localSettings.history && <button onClick={() => handleRedraw('history')} className="p-1 hover:bg-gray-200 rounded"><Icon name="RefreshCw" size={14} /></button>}
                             </div>
-                            <div className="mt-2 flex gap-2 items-center">
+                            <div className="mt-2 flex gap-2 items-center text-sm">
+                                <label>Lưới:</label>
                                 <input type="number" value={localSettings.rows} onChange={e => setLocalSettings(p => ({...p, rows: parseInt(e.target.value) || 1}))} className="w-full p-1 border rounded" /><span>hàng</span>
                                 <input type="number" value={localSettings.cols} onChange={e => setLocalSettings(p => ({...p, cols: parseInt(e.target.value) || 1}))} className="w-full p-1 border rounded" /><span>cột</span>
                             </div>
@@ -281,25 +280,21 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
     
     const [settings, setSettings] = useState(() => {
         try {
-            const saved = localStorage.getItem('visionSettings');
-            return saved ? JSON.parse(saved) : { latest: null, history: null, rows: 3, cols: 5 };
-        } catch { return { latest: null, history: null, rows: 3, cols: 5 }; }
+            const saved = localStorage.getItem('visionSettingsTaiXiu');
+            return saved ? JSON.parse(saved) : { latest: null, history: null, rows: 10, cols: 10 };
+        } catch { return { latest: null, history: null, rows: 10, cols: 10 }; }
     });
 
     const [lastResult, setLastResult] = useState(null);
 
-    // UPDATED OCR LOGIC
-    const recognizeDigit = (imageData) => {
+    const recognizeOutcome = (imageData) => {
         const data = imageData.data; let r = 0, g = 0, b = 0;
         for (let i = 0; i < data.length; i += 4) { r += data[i]; g += data[i + 1]; b += data[i + 2]; }
         const pixelCount = data.length / 4; r /= pixelCount; g /= pixelCount; b /= pixelCount;
         
-        if (r > 180 && g > 180 && b > 180) return 0; // White
-        if (b > r && b > g && b > 100) return 1;    // Blue
-        if (g > r && g > b && g > 100) return 2;    // Green
-        if (r > 150 && g > 120 && b < 100) return 3; // Yellow
-        if (r > 150 && g < 100 && b < 100) return 4; // Red
-        return null; // Undetermined
+        if (b > r && b > g && b > 100) return 'Tài';
+        if (r > b && r > g && r > 100) return 'Xỉu';
+        return null;
     };
 
     const startCapture = async () => {
@@ -321,7 +316,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
 
     const handleSaveSettings = (newSettings) => {
         setSettings(newSettings);
-        localStorage.setItem('visionSettings', JSON.stringify(newSettings));
+        localStorage.setItem('visionSettingsTaiXiu', JSON.stringify(newSettings));
     };
 
     useEffect(() => {
@@ -338,7 +333,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
 
                 const r = settings.latest;
                 const latestImageData = ctx.getImageData((r.x / 100) * canvas.width, (r.y / 100) * canvas.height, (r.width / 100) * canvas.width, (r.height / 100) * canvas.height);
-                const currentResult = recognizeDigit(latestImageData);
+                const currentResult = recognizeOutcome(latestImageData);
 
                 if (currentResult !== null && (lastResult === null || currentResult !== lastResult)) {
                     setLastResult(currentResult);
@@ -353,8 +348,8 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                                 const x = (h.x / 100) * canvas.width + col * cellWidth;
                                 const y = (h.y / 100) * canvas.height + row * cellHeight;
                                 const itemImageData = ctx.getImageData(x, y, cellWidth, cellHeight);
-                                const digit = recognizeDigit(itemImageData);
-                                if (digit !== null) historyResults.push(digit);
+                                const outcome = recognizeOutcome(itemImageData);
+                                if (outcome !== null) historyResults.push(outcome);
                             }
                         }
                         onVisionUpdate(currentResult, historyResults);
@@ -370,16 +365,10 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
         return { left: `${region.x}%`, top: `${region.y}%`, width: `${region.width}%`, height: `${region.height}%` };
     };
     
-    // NEW COLOR FUNCTION
-    const getDisplayColor = (count) => {
-        switch(count) {
-            case 0: return 'bg-gray-200 text-gray-800'; // White
-            case 1: return 'bg-blue-500 text-white';   // Blue
-            case 2: return 'bg-green-500 text-white';  // Green
-            case 3: return 'bg-yellow-400 text-black'; // Yellow
-            case 4: return 'bg-red-500 text-white';    // Red
-            default: return 'bg-gray-200 text-gray-800';
-        }
+    const getDisplayClass = (outcome) => {
+        if (outcome === 'Tài') return 'bg-blue-500 text-white';
+        if (outcome === 'Xỉu') return 'bg-red-500 text-white';
+        return 'bg-gray-200 text-gray-800';
     }
 
     return (
@@ -402,18 +391,17 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                 <video ref={videoRef} autoPlay muted className="absolute top-0 left-0 w-full h-full object-contain" />
                 <canvas ref={canvasRef} className="hidden" />
                 <div className="absolute inset-0">
-                    {settings.latest && <div className="absolute border-2 border-blue-500" style={getRegionStyle(settings.latest)} />}
-                    {settings.history && <div className="absolute border-2 border-green-500" style={getRegionStyle(settings.history)} />}
+                    {settings.latest && <div className="absolute border-2 border-yellow-400" style={getRegionStyle(settings.latest)} />}
+                    {settings.history && <div className="absolute border-2 border-purple-400" style={getRegionStyle(settings.history)} />}
                 </div>
             </div>
-            {/* NEW LATEST RESULTS DISPLAY */}
             <div className="mt-4">
                 <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">6 Kết quả Gần nhất (từ Vision)</h4>
                 <div className="bg-gray-100 p-2 rounded-lg">
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-6 gap-2">
                         {results.slice(-6).map((result, index) => (
-                            <div key={`${result.flip}-${index}`} className={`flex items-center justify-center w-full h-10 rounded font-mono font-bold text-lg ${getDisplayColor(result.redCount)}`}>
-                                {result.redCount}
+                            <div key={`${result.flip}-${index}`} className={`flex items-center justify-center w-full h-10 rounded font-mono font-bold text-lg ${getDisplayClass(result.outcome)}`}>
+                                {result.outcome === 'Tài' ? 'T' : 'X'}
                             </div>
                         ))}
                     </div>
@@ -428,7 +416,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
 export default function App() {
   const [results, setResults] = useState(() => {
     try {
-      const saved = localStorage.getItem('coinFlipHistory');
+      const saved = localStorage.getItem('taiXiuHistory');
       return saved ? JSON.parse(saved) : [];
     } catch { return []; }
   });
@@ -436,12 +424,11 @@ export default function App() {
   const [analysis, setAnalysis] = useState(null);
   const [patterns, setPatterns] = useState({});
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [visualHistory, setVisualHistory] = useState(false);
   const [isPredictionRunning, setIsPredictionRunning] = useState(true);
   
   const [modelPerformance, setModelPerformance] = useState(() => {
     try {
-        const saved = localStorage.getItem('modelPerformance');
+        const saved = localStorage.getItem('taiXiuModelPerformance');
         return saved ? JSON.parse(saved) : {};
     } catch { return {}; }
   });
@@ -449,45 +436,26 @@ export default function App() {
   const accuracyStats = useMemo(() => {
     const relevantResults = results.filter(r => r.predictionAtFlip);
     if (relevantResults.length === 0) return { correct: 0, total: 0, accuracy: 0 };
-    const correct = relevantResults.filter(r => r.redCount === r.predictionAtFlip.value).length;
+    const correct = relevantResults.filter(r => r.outcome === r.predictionAtFlip.value).length;
     const total = relevantResults.length;
     return { correct, total, accuracy: total > 0 ? (correct / total * 100) : 0 };
   }, [results]);
-
-  const theoreticalProbabilities = useMemo(() => {
-    const factorial = (n) => (n <= 1 ? 1 : n * factorial(n - 1));
-    const probabilities = [];
-    for (let redCount = 0; redCount <= 4; redCount++) {
-      const combinations = factorial(4) / (factorial(redCount) * factorial(4 - redCount));
-      probabilities.push({
-        outcome: `${redCount} Đỏ`,
-        probability: (combinations / 16) * 100,
-      });
-    }
-    return probabilities;
-  }, []);
   
-  const statistics = useMemo(() => {
-    if (results.length === 0) return {};
-    const redCounts = results.map(r => r.redCount);
-    const stats = {};
-    for (let i = 0; i <= 4; i++) {
-      const count = redCounts.filter(rc => rc === i).length;
-      stats[i] = {
-        observedPercent: (count / results.length * 100),
-      };
-    }
-    return stats;
+  const chartData = useMemo(() => {
+    let taiCount = 0;
+    let xiuCount = 0;
+    return results.map((r, i) => {
+        if(r.outcome === 'Tài') taiCount++;
+        else xiuCount++;
+        return {
+            name: `Lần ${i+1}`,
+            Tài: taiCount,
+            Xỉu: xiuCount,
+            Balance: taiCount - xiuCount
+        }
+    });
   }, [results]);
 
-  const barChartData = useMemo(() => {
-    if (!theoreticalProbabilities || Object.keys(statistics).length === 0) return [];
-    return theoreticalProbabilities.map((prob, index) => ({
-        name: prob.outcome,
-        "Lý thuyết": prob.probability,
-        "Thực tế": statistics[index]?.observedPercent || 0
-    }));
-  }, [theoreticalProbabilities, statistics]);
 
   const analyzeAndPredict = (currentResults) => {
     if (currentResults.length < 10) {
@@ -498,12 +466,12 @@ export default function App() {
     setIsAnalyzing(true);
     
     setTimeout(() => {
-      const redCounts = currentResults.map(r => r.redCount);
+      const outcomes = currentResults.map(r => r.outcome);
       const models = {
         'Tần suất Tổng thể': (data) => {
             if (data.length === 0) return null;
             const freq = data.reduce((acc, val) => ({ ...acc, [val]: (acc[val] || 0) + 1 }), {});
-            return parseInt(Object.keys(freq).reduce((a, b) => freq[a] > freq[b] ? a : b));
+            return Object.keys(freq).reduce((a, b) => freq[a] > freq[b] ? a : b);
         },
         'Tần suất Gần đây': (data) => models['Tần suất Tổng thể'](data.slice(-20)),
         'Chuỗi Markov (ngắn)': (data) => {
@@ -515,7 +483,7 @@ export default function App() {
                 transitions[current][next] = (transitions[current][next] || 0) + 1;
             }
             const last = data[data.length - 1];
-            if (transitions[last]) return parseInt(Object.keys(transitions[last]).reduce((a, b) => transitions[last][a] > transitions[last][b] ? a : b));
+            if (transitions[last]) return Object.keys(transitions[last]).reduce((a, b) => transitions[last][a] > transitions[last][b] ? a : b);
             return null;
         },
         'Chuỗi Markov (dài)': (data) => {
@@ -527,17 +495,11 @@ export default function App() {
                 transitions[current][next] = (transitions[current][next] || 0) + 1;
             }
             const last = `${data[data.length-2]},${data[data.length-1]}`;
-            if (transitions[last]) return parseInt(Object.keys(transitions[last]).reduce((a, b) => transitions[last][a] > transitions[last][b] ? a : b));
+            if (transitions[last]) return Object.keys(transitions[last]).reduce((a, b) => transitions[last][a] > transitions[last][b] ? a : b);
             return null;
         },
-        'Đảo ngược Xu thế': (data) => 4 - data[data.length - 1],
-        'Theo Xu hướng': (data) => {
-            if (data.length < 3) return null;
-            const lastThree = data.slice(-3);
-            if (lastThree[2] > lastThree[1] && lastThree[1] > lastThree[0]) return Math.min(4, lastThree[2] + 1);
-            if (lastThree[2] < lastThree[1] && lastThree[1] < lastThree[0]) return Math.max(0, lastThree[2] - 1);
-            return null;
-        },
+        'Theo Bệt': (data) => data[data.length - 1],
+        'Bẻ Bệt': (data) => data[data.length - 1] === 'Tài' ? 'Xỉu' : 'Tài',
       };
 
       const modelWeights = {};
@@ -556,7 +518,7 @@ export default function App() {
       const weightedVotes = {};
 
       Object.keys(models).forEach(name => {
-          const prediction = models[name](redCounts);
+          const prediction = models[name](outcomes);
           allPredictions[name] = { prediction, weight: modelWeights[name] };
           if (prediction !== null) {
               weightedVotes[prediction] = (weightedVotes[prediction] || 0) + modelWeights[name];
@@ -566,18 +528,12 @@ export default function App() {
       const mostCommon = Object.keys(weightedVotes).reduce((a, b) => weightedVotes[a] > weightedVotes[b] ? a : b, null);
       
       if (mostCommon !== null) {
-        const finalPredictionValue = parseInt(mostCommon);
+        const finalPredictionValue = mostCommon;
         const totalVotes = Object.values(weightedVotes).reduce((a,b)=>a+b,0);
         const confidence = totalVotes > 0 ? Math.round((weightedVotes[mostCommon] / totalVotes) * 100) : 0;
 
         setPrediction({ value: finalPredictionValue, confidence });
         
-        let commentary = '';
-        const last5Avg = redCounts.slice(-5).reduce((a,b)=>a+b,0)/5;
-        const overallAvg = redCounts.length > 0 ? redCounts.reduce((a,b)=>a+b,0)/redCounts.length : 0;
-        if(last5Avg > overallAvg + 0.5) commentary = "Gần đây có xu hướng ra nhiều Đỏ hơn trung bình.";
-        if(last5Avg < overallAvg - 0.5) commentary = "Gần đây có xu hướng ra ít Đỏ hơn trung bình.";
-
         setAnalysis({
             methods: Object.entries(allPredictions).map(([name, {prediction, weight}]) => ({
                 name,
@@ -585,34 +541,36 @@ export default function App() {
                 agrees: prediction === finalPredictionValue,
                 weight
             })),
-            commentary
         });
       }
       
       setPatterns({
-        average: (redCounts.length > 0 ? redCounts.reduce((a, b) => a + b, 0) / redCounts.length : 0).toFixed(2),
-        recent: redCounts.slice(-5),
+        recent: outcomes.slice(-5),
+        ratio: {
+            tai: outcomes.filter(o => o === 'Tài').length,
+            xiu: outcomes.filter(o => o === 'Xỉu').length
+        }
       });
       setIsAnalyzing(false);
     }, 500);
   };
 
   const handleVisionUpdate = (latestResult, historyResults) => {
-    const redCounts = results.map(r => r.redCount);
+    const outcomes = results.map(r => r.outcome);
     
     const newPerformance = { ...modelPerformance };
-    if (redCounts.length > 1) {
+    if (outcomes.length > 1) {
         const modelsToTest = {
-            'Tần suất Tổng thể': (data) => data.length > 0 ? parseInt(Object.keys(data.reduce((acc, val) => ({ ...acc, [val]: (acc[val] || 0) + 1 }), {})).reduce((a, b) => data[a] > data[b] ? a : b)) : null,
+            'Tần suất Tổng thể': (data) => data.length > 0 ? Object.keys(data.reduce((acc, val) => ({ ...acc, [val]: (acc[val] || 0) + 1 }), {})).reduce((a, b) => data[a] > data[b] ? a : b) : null,
             'Tần suất Gần đây': (data) => modelsToTest['Tần suất Tổng thể'](data.slice(-20)),
-            'Chuỗi Markov (ngắn)': (data) => { if (data.length < 2) return null; const t = {}; for (let i = 0; i < data.length - 1; i++) { const c = data[i], n = data[i + 1]; if (!t[c]) t[c] = {}; t[c][n] = (t[c][n] || 0) + 1; } const l = data[data.length - 1]; if (t[l]) return parseInt(Object.keys(t[l]).reduce((a, b) => t[l][a] > t[l][b] ? a : b)); return null; },
-            'Chuỗi Markov (dài)': (data) => { if (data.length < 3) return null; const t = {}; for (let i = 0; i < data.length - 2; i++) { const c = `${data[i]},${data[i+1]}`, n = data[i + 2]; if (!t[c]) t[c] = {}; t[c][n] = (t[c][n] || 0) + 1; } const l = `${data[data.length-2]},${data[data.length-1]}`; if (t[l]) return parseInt(Object.keys(t[l]).reduce((a, b) => t[l][a] > t[l][b] ? a : b)); return null; },
-            'Đảo ngược Xu thế': (data) => 4 - data[data.length - 1],
-            'Theo Xu hướng': (data) => { if (data.length < 3) return null; const l = data.slice(-3); if (l[2] > l[1] && l[1] > l[0]) return Math.min(4, l[2] + 1); if (l[2] < l[1] && l[1] < l[0]) return Math.max(0, l[2] - 1); return null; },
+            'Chuỗi Markov (ngắn)': (data) => { if (data.length < 2) return null; const t = {}; for (let i = 0; i < data.length - 1; i++) { const c = data[i], n = data[i + 1]; if (!t[c]) t[c] = {}; t[c][n] = (t[c][n] || 0) + 1; } const l = data[data.length - 1]; if (t[l]) return Object.keys(t[l]).reduce((a, b) => t[l][a] > t[l][b] ? a : b); return null; },
+            'Chuỗi Markov (dài)': (data) => { if (data.length < 3) return null; const t = {}; for (let i = 0; i < data.length - 2; i++) { const c = `${data[i]},${data[i+1]}`, n = data[i + 2]; if (!t[c]) t[c] = {}; t[c][n] = (t[c][n] || 0) + 1; } const l = `${data[data.length-2]},${data[data.length-1]}`; if (t[l]) return Object.keys(t[l]).reduce((a, b) => t[l][a] > t[l][b] ? a : b); return null; },
+            'Theo Bệt': (data) => data[data.length-1],
+            'Bẻ Bệt': (data) => data[data.length - 1] === 'Tài' ? 'Xỉu' : 'Tài',
         };
         
         Object.keys(modelsToTest).forEach(name => {
-            const predictionBefore = modelsToTest[name](redCounts);
+            const predictionBefore = modelsToTest[name](outcomes);
             if (predictionBefore !== null) {
                 if (!newPerformance[name]) newPerformance[name] = [];
                 newPerformance[name].push({ prediction: predictionBefore, correct: predictionBefore === latestResult });
@@ -625,8 +583,7 @@ export default function App() {
     const newHistory = [...historyResults, latestResult];
     const newFullResults = newHistory.map((res, index) => ({
         flip: index + 1,
-        outcome: Array(4).fill('Trắng').map((_, i) => i < res ? 'Đỏ' : 'Trắng').join(', '),
-        redCount: res,
+        outcome: res,
         timestamp: new Date().toLocaleTimeString(),
         isFromVision: true,
         predictionAtFlip: prediction
@@ -637,14 +594,14 @@ export default function App() {
   const resetResults = () => {
     if (window.confirm("Bạn có chắc chắn muốn xóa toàn bộ lịch sử không?")) {
         setResults([]); setPrediction(null); setPatterns({}); setModelPerformance({});
-        localStorage.removeItem('coinFlipHistory');
-        localStorage.removeItem('modelPerformance');
+        localStorage.removeItem('taiXiuHistory');
+        localStorage.removeItem('taiXiuModelPerformance');
     }
   };
 
   useEffect(() => {
-    localStorage.setItem('coinFlipHistory', JSON.stringify(results));
-    localStorage.setItem('modelPerformance', JSON.stringify(modelPerformance));
+    localStorage.setItem('taiXiuHistory', JSON.stringify(results));
+    localStorage.setItem('taiXiuModelPerformance', JSON.stringify(modelPerformance));
     if (isPredictionRunning) {
         analyzeAndPredict(results);
     }
@@ -656,10 +613,10 @@ export default function App() {
         <header className="bg-white rounded-xl shadow-lg p-4 mb-6">
            <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center space-x-3">
-              <Icon name="Coins" className="w-10 h-10 text-red-600" />
+              <Icon name="Dices" className="w-10 h-10 text-blue-600" />
               <div>
-                <h1 className="text-xl md:text-2xl font-bold text-gray-800">Trợ lý Dự đoán Thông minh</h1>
-                <p className="text-xs md:text-sm text-gray-500">Phân tích & Dự đoán kết quả 4 đồng xu</p>
+                <h1 className="text-xl md:text-2xl font-bold text-gray-800">Trợ lý Phân tích Tài Xỉu</h1>
+                <p className="text-xs md:text-sm text-gray-500">Phân tích & Dự đoán kết quả Xúc xắc</p>
               </div>
             </div>
             <div className="flex items-center flex-wrap gap-2">
@@ -673,17 +630,34 @@ export default function App() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
             <VisionAnalyzer onVisionUpdate={handleVisionUpdate} results={results} />
+             <div className="bg-white rounded-xl shadow-lg p-6">
+                <h2 className="text-lg font-semibold text-gray-800 mb-4">Xu hướng Tài / Xỉu</h2>
+                {results.length > 2 ? (
+                <ResponsiveContainer width="100%" height={250}>
+                    <LineChart data={chartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <Tooltip />
+                        <Legend />
+                        <Line type="monotone" dataKey="Tài" stroke="#3b82f6" strokeWidth={2} />
+                        <Line type="monotone" dataKey="Xỉu" stroke="#ef4444" strokeWidth={2} />
+                        <Line type="monotone" dataKey="Balance" stroke="#82ca9d" strokeDasharray="3 3" name="Cân bằng (Tài-Xỉu)" />
+                    </LineChart>
+                </ResponsiveContainer>
+                ) : <div className="text-center text-gray-500 py-16">Chưa đủ dữ liệu để vẽ biểu đồ.</div>}
+            </div>
           </div>
 
           <div className="lg:col-span-1 space-y-6">
             <AIPredictionDisplay prediction={prediction} analysis={analysis} isAnalyzing={isAnalyzing} isPredictionRunning={isPredictionRunning} onTogglePrediction={() => setIsPredictionRunning(p => !p)} />
             <StatCard iconName="Target" title="Độ chính xác AI" value={`${accuracyStats.accuracy.toFixed(1)}%`} footer={`${accuracyStats.correct}/${accuracyStats.total} đúng`} color="border-green-500" />
-            <StatCard iconName="Sigma" title="Trung bình (Đỏ/lần)" value={patterns.average || '0.00'} footer="Dựa trên toàn bộ lịch sử" color="border-blue-500" />
+            <StatCard iconName="Sigma" title="Tỷ lệ Tài / Xỉu" value={`${patterns.ratio?.tai || 0} / ${patterns.ratio?.xiu || 0}`} footer="Dựa trên toàn bộ lịch sử" color="border-purple-500" />
             <StatCard iconName="History" title="5 lần gần nhất" value="" color="border-yellow-500">
                 <div className="flex items-center gap-2">
                     {(patterns.recent && patterns.recent.length > 0 ? patterns.recent : Array(5).fill('-')).map((res, i) => (
-                        <div key={i} className={`w-8 h-8 rounded-full flex items-center justify-center text-gray-700 font-bold text-sm ${res !== '-' && res > 2 ? 'bg-red-100' : 'bg-gray-200'}`}>
-                            {res}
+                        <div key={i} className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${res === 'Tài' ? 'bg-blue-500 text-white' : res === 'Xỉu' ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-700'}`}>
+                            {res === 'Tài' ? 'T' : res === 'Xỉu' ? 'X' : '-'}
                         </div>
                     ))}
                 </div>
