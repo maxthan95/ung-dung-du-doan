@@ -285,6 +285,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
     const [isCapturing, setIsCapturing] = useState(false);
     const [stream, setStream] = useState(null);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [scanState, setScanState] = useState('IDLE');
     
     const [settings, setSettings] = useState(() => {
         try {
@@ -293,8 +294,8 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
         } catch { return { latest: null, history: null, timer: null, rows: 3, cols: 5 }; }
     });
 
-    const wasTimerRunning = useRef(false);
     const [debugInfo, setDebugInfo] = useState({ status: 'Đã dừng', lastDigit: 'N/A', lastOutcome: 'N/A' });
+    const lastHistoryHash = useRef(null);
 
     const recognizeDigit = (imageData) => {
         const data = imageData.data; let r = 0, g = 0, b = 0;
@@ -314,13 +315,18 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
         return [0, 2, 4].includes(digit) ? 'Chẵn' : 'Lẻ';
     };
 
-    const runFullScan = () => {
-        if (!isCapturing || !videoRef.current || videoRef.current.readyState < 2) {
-            alert("Chưa bắt đầu ghi hình hoặc video chưa sẵn sàng.");
-            return;
-        }
+    const getHistoryHash = (ctx) => {
+        const h = settings.history;
+        if (!h) return null;
+        const imageData = ctx.getImageData((h.x / 100) * ctx.canvas.width, (h.y / 100) * ctx.canvas.height, (h.width / 100) * ctx.canvas.width, (h.height / 100) * ctx.canvas.height);
+        // Simple hash: sum of all pixel values
+        return imageData.data.reduce((a, b) => a + b, 0);
+    };
 
-        setDebugInfo({ status: 'Đang quét thủ công...', lastDigit: 'N/A', lastOutcome: 'N/A' });
+    const runFullScan = () => {
+        if (!isCapturing || !videoRef.current || videoRef.current.readyState < 2) return;
+
+        setDebugInfo({ status: 'Đang quét...', lastDigit: 'N/A', lastOutcome: 'N/A' });
         
         const video = videoRef.current;
         const canvas = canvasRef.current;
@@ -334,26 +340,24 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
         const currentDigit = recognizeDigit(latestImageData);
         const currentResult = toChanLe(currentDigit);
         
-        setDebugInfo({ status: 'Hoàn tất quét.', lastDigit: currentDigit, lastOutcome: currentResult });
+        const h = settings.history;
+        const historyResults = [];
+        const cellWidth = ((h.width / 100) * canvas.width) / settings.cols;
+        const cellHeight = ((h.height / 100) * canvas.height) / settings.rows;
 
-        if (currentResult !== null) {
-            const h = settings.history;
-            const historyResults = [];
-            const cellWidth = ((h.width / 100) * canvas.width) / settings.cols;
-            const cellHeight = ((h.height / 100) * canvas.height) / settings.rows;
-
-            for (let row = 0; row < settings.rows; row++) {
-                for (let col = 0; col < settings.cols; col++) {
-                    const x = (h.x / 100) * canvas.width + col * cellWidth;
-                    const y = (h.y / 100) * canvas.height + row * cellHeight;
-                    const itemImageData = ctx.getImageData(x, y, cellWidth, cellHeight);
-                    const digit = recognizeDigit(itemImageData);
-                    const outcome = toChanLe(digit);
-                    if (outcome !== null) historyResults.push({outcome, redCount: digit});
-                }
+        for (let row = 0; row < settings.rows; row++) {
+            for (let col = 0; col < settings.cols; col++) {
+                const x = (h.x / 100) * canvas.width + col * cellWidth;
+                const y = (h.y / 100) * canvas.height + row * cellHeight;
+                const itemImageData = ctx.getImageData(x, y, cellWidth, cellHeight);
+                const digit = recognizeDigit(itemImageData);
+                const outcome = toChanLe(digit);
+                if (outcome !== null) historyResults.push({outcome, redCount: digit});
             }
-            onVisionUpdate({outcome: currentResult, redCount: currentDigit}, historyResults);
         }
+        onVisionUpdate({outcome: currentResult, redCount: currentDigit}, historyResults);
+        lastHistoryHash.current = getHistoryHash(ctx);
+        setDebugInfo({ status: 'Quét xong.', lastDigit: currentDigit, lastOutcome: currentResult });
     };
 
 
@@ -363,7 +367,8 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
             setStream(mediaStream);
             if (videoRef.current) videoRef.current.srcObject = mediaStream;
             setIsCapturing(true);
-            setDebugInfo({ status: 'Đang chờ đồng hồ...', lastDigit: 'N/A', lastOutcome: 'N/A' });
+            setScanState('WAITING_FOR_TIMER_START');
+            setDebugInfo({ status: 'Chờ đồng hồ bắt đầu...', lastDigit: 'N/A', lastOutcome: 'N/A' });
             if (!settings.latest || !settings.history || !settings.timer) {
                 setIsSettingsOpen(true);
             }
@@ -372,7 +377,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
 
     const stopCapture = () => {
         if (stream) stream.getTracks().forEach(track => track.stop());
-        setStream(null); setIsCapturing(false); wasTimerRunning.current = false;
+        setStream(null); setIsCapturing(false); setScanState('IDLE');
         setDebugInfo({ status: 'Đã dừng', lastDigit: 'N/A', lastOutcome: 'N/A' });
     };
 
@@ -383,41 +388,64 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
 
     useEffect(() => {
         let intervalId;
-        if (isCapturing && settings.latest && settings.history && settings.timer) {
+        if (isCapturing && settings.timer && settings.latest && settings.history) {
             const video = videoRef.current;
             const canvas = canvasRef.current;
             const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
             intervalId = setInterval(() => {
-                if (video.readyState < 2) return;
+                if (!video || video.readyState < 2) return;
                 canvas.width = video.videoWidth; canvas.height = video.videoHeight;
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
                 const t = settings.timer;
                 const timerImageData = ctx.getImageData((t.x / 100) * canvas.width, (t.y / 100) * canvas.height, (t.width / 100) * canvas.width, (t.height / 100) * canvas.height);
-                // Simple timer logic: check for significant change, e.g., numbers appearing/disappearing
+                
                 const averageBrightness = (imageData) => {
                     const data = imageData.data; let sum = 0;
                     for(let i=0; i<data.length; i+=4) sum += (data[i]+data[i+1]+data[i+2])/3;
                     return sum / (data.length/4);
                 }
                 const currentBrightness = averageBrightness(timerImageData);
-                
-                const isTimerActive = currentBrightness > 40; // Assume timer is running if not mostly black
+                const isTimerActive = currentBrightness > 50; 
 
-                if (isTimerActive) {
-                    wasTimerRunning.current = true;
-                    setDebugInfo(prev => ({ ...prev, status: 'Đang chờ đồng hồ...' }));
+                switch (scanState) {
+                    case 'WAITING_FOR_TIMER_START':
+                        if (isTimerActive) {
+                            setDebugInfo(prev => ({ ...prev, status: 'Đang chờ đồng hồ kết thúc...' }));
+                            setScanState('WAITING_FOR_TIMER_END');
+                        }
+                        break;
+                    case 'WAITING_FOR_TIMER_END':
+                        if (!isTimerActive) {
+                            setDebugInfo(prev => ({ ...prev, status: 'Quét liên tục chờ kết quả...' }));
+                            setScanState('POLLING_FOR_RESULT');
+                        }
+                        break;
+                    case 'POLLING_FOR_RESULT':
+                        const r = settings.latest;
+                        const latestImageData = ctx.getImageData((r.x / 100) * canvas.width, (r.y / 100) * canvas.height, (r.width / 100) * canvas.width, (r.height / 100) * canvas.height);
+                        const currentDigit = recognizeDigit(latestImageData);
+                        const currentResult = toChanLe(currentDigit);
+
+                        const lastAppResult = results.length > 0 ? results[results.length - 1].outcome : null;
+                        const currentHistoryHash = getHistoryHash(ctx);
+                        
+                        const isNewResultValid = currentResult !== null && currentResult !== lastAppResult;
+                        const hasHistoryChanged = lastHistoryHash.current !== null && currentHistoryHash !== lastHistoryHash.current;
+
+                        if (isNewResultValid && hasHistoryChanged) {
+                           runFullScan();
+                           setScanState('WAITING_FOR_TIMER_START');
+                        }
+                        break;
+                    default:
+                        setScanState('IDLE');
                 }
-                
-                if (!isTimerActive && wasTimerRunning.current) {
-                    wasTimerRunning.current = false; // Trigger only once per cycle
-                    runFullScan();
-                }
-            }, 1000); // Check once per second
+            }, 500); // Check twice per second
         }
         return () => clearInterval(intervalId);
-    }, [isCapturing, settings, results]); // Removed onVisionUpdate dependency to avoid re-creating interval
+    }, [isCapturing, settings, scanState, results]); 
 
     const getRegionStyle = (region) => {
         if (!region) return {};
