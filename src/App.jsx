@@ -42,28 +42,22 @@ const AIPredictionDisplay = ({ prediction, analysis, isAnalyzing, isPredictionRu
             <div>
                 <div className="text-center mb-6">
                     <p className="text-sm text-gray-500">Dự đoán Tối ưu</p>
-                    <div className={`text-6xl font-bold my-2 ${isChan ? 'text-blue-600' : 'text-orange-500'}`}>{prediction.value.toUpperCase()}</div>
+                    <div className={`text-5xl font-bold my-2 ${isChan ? 'text-blue-600' : 'text-orange-500'}`}>{prediction.value.toUpperCase()}</div>
                     <div className="flex items-center justify-center space-x-2 bg-green-100 text-green-700 px-3 py-1 rounded-full w-fit mx-auto">
                         <Icon name="Target" className="w-4 h-4" />
                         <span className="text-sm font-medium">Độ tin cậy: {prediction.confidence}%</span>
                     </div>
                 </div>
-                <div className="space-y-3">
-                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Phân tích Chi tiết từ các Mô hình</h4>
+                <div className="space-y-2">
+                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Phân tích Chi tiết</h4>
                     {analysis.methods.map(method => (
-                        <div key={method.name} className={`p-3 rounded-lg ${method.agrees ? 'bg-purple-50 border border-purple-200' : 'bg-gray-50'}`}>
+                        <div key={method.name} className={`p-2 rounded-lg ${method.agrees ? 'bg-purple-50' : 'bg-gray-50'}`}>
                            <div className="flex items-center justify-between">
-                               <div className="flex items-center gap-3">
-                                    <Icon name={methodIcons[method.name] || 'Brain'} className={`w-5 h-5 ${method.agrees ? 'text-purple-600' : 'text-gray-400'}`} />
-                                    <span className="text-sm text-gray-700 font-medium">{method.name}</span>
+                               <div className="flex items-center gap-2">
+                                    <Icon name={methodIcons[method.name] || 'Brain'} className={`w-4 h-4 ${method.agrees ? 'text-purple-600' : 'text-gray-400'}`} />
+                                    <span className="text-xs text-gray-700 font-medium">{method.name}</span>
                                 </div>
-                                <div className={`text-sm font-bold ${method.agrees ? 'text-purple-600' : 'text-gray-500'}`}>{method.prediction || 'N/A'}</div>
-                           </div>
-                           <div className="flex items-center gap-2 mt-2">
-                                <div className="text-xs text-gray-500 w-20">Độ hiệu quả:</div>
-                                <div className="w-full bg-gray-200 rounded-full h-1.5">
-                                    <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${method.weight * 100}%` }}></div>
-                                </div>
+                                <div className={`text-xs font-bold ${method.agrees ? 'text-purple-600' : 'text-gray-500'}`}>{method.prediction || 'N/A'}</div>
                            </div>
                         </div>
                     ))}
@@ -93,7 +87,7 @@ const ManualInput = ({ onNewResult }) => {
         onNewResult(redCount);
     };
 
-    const buttonStyle = "flex-1 p-4 rounded-lg text-lg font-bold transition-transform transform hover:scale-105";
+    const buttonStyle = "flex-1 p-3 rounded-lg text-base font-bold transition-transform transform hover:scale-105";
     const colors = [
         "bg-gray-200 text-gray-800", // 0
         "bg-blue-500 text-white",     // 1
@@ -104,8 +98,8 @@ const ManualInput = ({ onNewResult }) => {
 
     return (
         <div className="bg-white rounded-xl shadow-lg p-6 border-t-4 border-teal-500">
-            <h2 className="text-lg font-semibold text-teal-800 mb-4">Nhập Kết quả Lượt mới</h2>
-            <div className="flex gap-4">
+            <h2 className="text-lg font-semibold text-teal-800 mb-4">Nhập Kết quả</h2>
+            <div className="flex gap-2">
                 {[0, 1, 2, 3, 4].map(num => (
                     <button key={num} onClick={() => handleButtonClick(num)} className={`${buttonStyle} ${colors[num]}`}>
                         {num}
@@ -116,53 +110,58 @@ const ManualInput = ({ onNewResult }) => {
     );
 };
 
-// --- History Display Component ---
+// --- History Display Component (Grid Version) ---
 const HistoryDisplay = ({ results }) => {
-    const endOfHistoryRef = useRef(null);
-
-    useEffect(() => {
-        endOfHistoryRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [results]);
+    const gridRef = useRef(null);
 
     const getOutcomeClass = (outcome) => {
-        if (outcome === 'Chẵn') return 'bg-blue-100 text-blue-800';
-        if (outcome === 'Lẻ') return 'bg-orange-100 text-orange-800';
-        return '';
+        if (outcome === 'Chẵn') return 'bg-blue-500 text-white';
+        if (outcome === 'Lẻ') return 'bg-orange-500 text-white';
+        return 'bg-gray-200 text-gray-400';
     };
+
+    const gridColumns = useMemo(() => {
+        const columns = [];
+        if (results.length === 0) return columns;
+
+        let currentColumn = [];
+        for (let i = 0; i < results.length; i++) {
+            if (i > 0 && results[i].outcome !== results[i-1].outcome) {
+                columns.push(currentColumn);
+                currentColumn = [];
+            }
+            currentColumn.push(results[i]);
+        }
+        columns.push(currentColumn);
+        return columns;
+    }, [results]);
+    
+    useEffect(() => {
+        if (gridRef.current) {
+            gridRef.current.scrollLeft = gridRef.current.scrollWidth;
+        }
+    }, [gridColumns]);
+
 
     return (
          <div className="bg-white rounded-xl shadow-lg p-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4">Lịch sử Kết quả</h2>
-            <div className="max-h-96 overflow-y-auto pr-2">
+            <h2 className="text-lg font-semibold text-gray-800 mb-4">Lịch sử Kết quả (Dạng bệt)</h2>
+            <div ref={gridRef} className="bg-gray-100 p-2 rounded-lg overflow-x-auto flex flex-row-reverse gap-1">
                 {results.length > 0 ? (
-                    <table className="w-full text-sm text-left">
-                        <thead className="text-xs text-gray-700 uppercase bg-gray-50 sticky top-0">
-                            <tr>
-                                <th scope="col" className="px-6 py-3">Lần</th>
-                                <th scope="col" className="px-6 py-3">Số Đỏ</th>
-                                <th scope="col" className="px-6 py-3">Kết quả</th>
-                                <th scope="col" className="px-6 py-3">Thời gian</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {results.map((result) => (
-                                <tr key={result.flip} className="bg-white border-b">
-                                    <th scope="row" className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">
-                                        #{result.flip}
-                                    </th>
-                                    <td className="px-6 py-4">{result.redCount}</td>
-                                    <td className="px-6 py-4">
-                                        <span className={`px-2 py-1 font-semibold rounded-full ${getOutcomeClass(result.outcome)}`}>
-                                            {result.outcome}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4">{result.timestamp}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                ) : <div className="text-center text-gray-500 py-8">Chưa có lịch sử.</div>}
-                <div ref={endOfHistoryRef} />
+                    gridColumns.slice().reverse().map((column, colIndex) => (
+                        <div key={colIndex} className="flex flex-col gap-1">
+                           {column.map(result => (
+                               <div 
+                                   key={result.flip} 
+                                   className={`w-8 h-8 rounded-md flex items-center justify-center font-bold text-sm ${getOutcomeClass(result.outcome)}`}
+                                   title={`Lần #${result.flip}: ${result.redCount} đỏ`}
+                               >
+                                   {result.outcome === 'Chẵn' ? 'C' : 'L'}
+                               </div>
+                           ))}
+                        </div>
+                    ))
+                ) : <div className="text-center text-gray-500 py-8 w-full">Chưa có lịch sử.</div>}
             </div>
         </div>
     );
@@ -191,7 +190,7 @@ const VisionMonitor = () => {
     };
 
     return (
-        <div className="bg-white rounded-xl shadow-lg p-6 border-t-4 border-indigo-500">
+        <div className="bg-white rounded-xl shadow-lg p-6 border-t-4 border-indigo-500 h-full flex flex-col">
             <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-indigo-800">📺 Màn hình Theo dõi</h2>
                 <button onClick={isCapturing ? stopCapture : startCapture} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-white ${isCapturing ? 'bg-red-500 hover:bg-red-600' : 'bg-indigo-500 hover:bg-indigo-600'}`}>
@@ -199,7 +198,7 @@ const VisionMonitor = () => {
                     {isCapturing ? 'Dừng Ghi' : 'Bắt đầu Ghi'}
                 </button>
             </div>
-            <div className="relative bg-gray-900 rounded-lg overflow-hidden w-full" style={{ paddingBottom: '56.25%' }}>
+            <div className="relative bg-gray-900 rounded-lg overflow-hidden w-full flex-1">
                 <video ref={videoRef} autoPlay muted className="absolute top-0 left-0 w-full h-full object-contain" />
             </div>
         </div>
@@ -456,7 +455,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 md:p-6">
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-screen-2xl mx-auto">
         <header className="bg-white rounded-xl shadow-lg p-4 mb-6">
            <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center space-x-3">
@@ -474,18 +473,24 @@ export default function App() {
           </div>
         </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
-            <ManualInput onNewResult={handleManualInput} />
-            <HistoryDisplay results={results} />
-          </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            <div className="lg:col-span-2">
+                <VisionMonitor />
+            </div>
+            <div className="space-y-6">
+                <ManualInput onNewResult={handleManualInput} />
+                <AIPredictionDisplay prediction={prediction} analysis={analysis} isAnalyzing={isAnalyzing} isPredictionRunning={isPredictionRunning} onTogglePrediction={() => setIsPredictionRunning(p => !p)} />
+            </div>
+        </div>
 
-          <div className="lg:col-span-1 space-y-6">
-            <AIPredictionDisplay prediction={prediction} analysis={analysis} isAnalyzing={isAnalyzing} isPredictionRunning={isPredictionRunning} onTogglePrediction={() => setIsPredictionRunning(p => !p)} />
-            <VisionMonitor />
-            <StatCard iconName="Target" title="Độ chính xác AI" value={`${accuracyStats.accuracy.toFixed(1)}%`} footer={`${accuracyStats.correct}/${accuracyStats.total} đúng`} color="border-green-500" />
-            <StatCard iconName="Sigma" title="Tỷ lệ Chẵn / Lẻ" value={`${patterns.ratio?.chan || 0} / ${patterns.ratio?.le || 0}`} footer="Dựa trên toàn bộ lịch sử" color="border-purple-500" />
-          </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+             <div className="lg:col-span-2">
+                 <HistoryDisplay results={results} />
+            </div>
+             <div className="space-y-6">
+                <StatCard iconName="Target" title="Độ chính xác AI" value={`${accuracyStats.accuracy.toFixed(1)}%`} footer={`${accuracyStats.correct}/${accuracyStats.total} đúng`} color="border-green-500" />
+                <StatCard iconName="Sigma" title="Tỷ lệ Chẵn / Lẻ" value={`${patterns.ratio?.chan || 0} / ${patterns.ratio?.le || 0}`} footer="Dựa trên toàn bộ lịch sử" color="border-purple-500" />
+             </div>
         </div>
       </div>
     </div>
