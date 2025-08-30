@@ -42,7 +42,7 @@ const AIPredictionDisplay = ({ prediction, analysis, isAnalyzing, isPredictionRu
             <div>
                 <div className="text-center mb-6">
                     <p className="text-sm text-gray-500">Dự đoán Tối ưu</p>
-                    <div className={`text-6xl font-bold my-2 ${isChan ? 'text-blue-600' : 'text-red-600'}`}>{prediction.value.toUpperCase()}</div>
+                    <div className={`text-6xl font-bold my-2 ${isChan ? 'text-blue-600' : 'text-orange-500'}`}>{prediction.value.toUpperCase()}</div>
                     <div className="flex items-center justify-center space-x-2 bg-green-100 text-green-700 px-3 py-1 rounded-full w-fit mx-auto">
                         <Icon name="Target" className="w-4 h-4" />
                         <span className="text-sm font-medium">Độ tin cậy: {prediction.confidence}%</span>
@@ -251,7 +251,7 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialSettings 
                         </div>
                     </div>
                     <div className="flex flex-col justify-center space-y-4">
-                        <Step title="Bước 1: Vẽ vùng [Kết quả mới]" isComplete={!!localSettings.latest} isActive={setupStep === 'drawingLatest'} onRedraw={() => handleRedraw('latest')} />
+                        <Step title="Bước 1: Vẽ vùng [4 Đồng xu]" isComplete={!!localSettings.latest} isActive={setupStep === 'drawingLatest'} onRedraw={() => handleRedraw('latest')} />
                         <Step title="Bước 2: Vẽ vùng [Lịch sử]" isComplete={!!localSettings.history} isActive={setupStep === 'drawingHistory'} onRedraw={() => handleRedraw('history')}>
                             <div className="mt-2 flex gap-2 items-center text-sm">
                                 <label>Kích thước ô (%):</label>
@@ -287,10 +287,23 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
         } catch { return { latest: null, history: null, timer: null, cellWidth: 2, cellHeight: 4 }; }
     });
 
-    const [debugInfo, setDebugInfo] = useState({ status: 'Đã dừng', lastOutcome: 'N/A' });
-    const polledResultRef = useRef(null);
+    const [debugInfo, setDebugInfo] = useState({ status: 'Đã dừng', latestCoinCount: 'N/A', historyChar: 'N/A' });
+    
+    const recognizeCoinColor = (imageData) => {
+        const data = imageData.data;
+        let r = 0, g = 0, b = 0;
+        for (let i = 0; i < data.length; i += 4) {
+            r += data[i]; g += data[i + 1]; b += data[i + 2];
+        }
+        const pixelCount = data.length / 4;
+        r /= pixelCount; g /= pixelCount; b /= pixelCount;
 
-    const recognizeCharacter = (imageData) => {
+        if (r > 150 && g < 100 && b < 100) return 'Red';
+        if (r > 180 && g > 180 && b > 180) return 'White';
+        return 'Unknown';
+    };
+
+    const recognizeHistoryChar = (imageData) => {
         const data = imageData.data;
         let r = 0, g = 0, b = 0;
         for (let i = 0; i < data.length; i += 4) {
@@ -304,52 +317,10 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
         return null;
     };
     
-    const runFullScan = (finalResult) => {
-        if (!isCapturing || !videoRef.current || videoRef.current.readyState < 2) return;
-        
-        const video = videoRef.current;
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        canvas.width = video.videoWidth; 
-        canvas.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
-        const h = settings.history;
-        const historyResults = [];
-        const cellPixelWidth = (settings.cellWidth / 100) * canvas.width;
-        const cellPixelHeight = (settings.cellHeight / 100) * canvas.height;
-        const historyPixelWidth = (h.width / 100) * canvas.width;
-        
-        const foundChars = [];
-
-        for (let y = 0; y < (h.height / 100) * canvas.height - cellPixelHeight; y += cellPixelHeight / 2) {
-            for (let x = 0; x < historyPixelWidth - cellPixelWidth; x += cellPixelWidth / 2) {
-                const itemImageData = ctx.getImageData(
-                    (h.x / 100) * canvas.width + x,
-                    (h.y / 100) * canvas.height + y,
-                    cellPixelWidth, cellPixelHeight
-                );
-                const outcome = recognizeCharacter(itemImageData);
-                if (outcome) {
-                    const isDuplicate = foundChars.some(c => Math.abs(c.x - x) < cellPixelWidth / 2 && Math.abs(c.y - y) < cellPixelHeight / 2);
-                    if (!isDuplicate) {
-                        foundChars.push({ outcome, x, y });
-                    }
-                }
-            }
-        }
-        
-        foundChars.sort((a, b) => {
-            const colA = Math.floor(a.x / cellPixelWidth);
-            const colB = Math.floor(b.x / cellPixelWidth);
-            if (colA !== colB) return colA - colB;
-            return a.y - b.y;
-        });
-
-        onVisionUpdate({ outcome: finalResult }, foundChars.map(c => ({ outcome: c.outcome })));
-        setDebugInfo({ status: 'Quét xong.', lastOutcome: finalResult });
+    const toChanLe = (digit) => {
+        if (digit === null) return null;
+        return [0, 2, 4].includes(digit) ? 'Chẵn' : 'Lẻ';
     };
-
 
     const startCapture = async () => {
         try {
@@ -357,8 +328,8 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
             setStream(mediaStream);
             if (videoRef.current) videoRef.current.srcObject = mediaStream;
             setIsCapturing(true);
-            setScanState('WAITING_FOR_TIMER_END');
-            setDebugInfo({ status: 'Chờ đồng hồ kết thúc...', lastOutcome: 'N/A' });
+            setScanState('WAITING_FOR_TIMER_TO_DISAPPEAR');
+            setDebugInfo({ status: 'Chờ đồng hồ chạy...', latestCoinCount: 'N/A', historyChar: 'N/A' });
             if (!settings.latest || !settings.history || !settings.timer) {
                 setIsSettingsOpen(true);
             }
@@ -368,7 +339,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
     const stopCapture = () => {
         if (stream) stream.getTracks().forEach(track => track.stop());
         setStream(null); setIsCapturing(false); setScanState('IDLE');
-        setDebugInfo({ status: 'Đã dừng', lastOutcome: 'N/A' });
+        setDebugInfo({ status: 'Đã dừng', latestCoinCount: 'N/A', historyChar: 'N/A' });
     };
 
     const handleSaveSettings = (newSettings) => {
@@ -396,38 +367,84 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                     for(let i=0; i<data.length; i+=4) sum += (data[i]+data[i+1]+data[i+2])/3;
                     return sum / (data.length/4);
                 }
-                const currentBrightness = averageBrightness(timerImageData);
-                const isTimerVisible = currentBrightness > 50; 
+                const isTimerVisible = averageBrightness(timerImageData) > 50; 
 
                 switch (scanState) {
-                    case 'WAITING_FOR_TIMER_END':
+                    case 'WAITING_FOR_TIMER_TO_DISAPPEAR':
                         if (!isTimerVisible) {
-                            setDebugInfo(prev => ({ ...prev, status: 'Quét liên tục chờ kết quả...' }));
-                            setScanState('POLLING_FOR_RESULT');
+                            setDebugInfo(prev => ({ ...prev, status: 'Quét và đối chiếu...' }));
+                            setScanState('SCANNING_AND_VALIDATING');
                         }
                         break;
-                    case 'POLLING_FOR_RESULT':
+
+                    case 'SCANNING_AND_VALIDATING':
+                        // Scan latest result (coins)
+                        const r = settings.latest;
+                        const latestRegionWidth = (r.width / 100) * canvas.width;
+                        const latestRegionHeight = (r.height / 100) * canvas.height;
+                        const coinWidth = latestRegionWidth / 2;
+                        const coinHeight = latestRegionHeight / 2;
+                        let redCoinCount = 0;
+                        const coinPositions = [{x: 0, y: 0}, {x: coinWidth, y: 0}, {x: 0, y: coinHeight}, {x: coinWidth, y: coinHeight}];
+                        for (const pos of coinPositions) {
+                            const imgData = ctx.getImageData((r.x / 100) * canvas.width + pos.x, (r.y / 100) * canvas.height + pos.y, coinWidth, coinHeight);
+                            if (recognizeCoinColor(imgData) === 'Red') redCoinCount++;
+                        }
+                        const latestChanLe = toChanLe(redCoinCount);
+
+                        // Scan history (character)
+                        const h = settings.history;
+                        const cellPixelWidth = (settings.cellWidth / 100) * canvas.width;
+                        const cellPixelHeight = (settings.cellHeight / 100) * canvas.height;
+                        const itemImageData = ctx.getImageData((h.x / 100) * canvas.width, (h.y / 100) * canvas.height, cellPixelWidth, cellPixelHeight);
+                        const historyChanLe = recognizeHistoryChar(itemImageData);
+                        
+                        setDebugInfo({ status: 'Quét và đối chiếu...', latestCoinCount: `${redCoinCount} (${latestChanLe || ''})`, historyChar: historyChanLe || 'N/A' });
+                        
+                        const lastAppResult = results.length > 0 ? results[results.length - 1].outcome : null;
+
+                        if (latestChanLe && historyChanLe && latestChanLe === historyChanLe && latestChanLe !== lastAppResult) {
+                            // Validated!
+                             const fullHistoryResults = [];
+                             const historyPixelWidth = (h.width / 100) * canvas.width;
+                             const foundChars = [];
+                             for (let y = 0; y < (h.height / 100) * canvas.height - cellPixelHeight; y += cellPixelHeight / 2) {
+                                 for (let x = 0; x < historyPixelWidth - cellPixelWidth; x += cellPixelWidth / 2) {
+                                     const imgData = ctx.getImageData((h.x / 100) * canvas.width + x, (h.y / 100) * canvas.height + y, cellPixelWidth, cellPixelHeight);
+                                     const outcome = recognizeHistoryChar(imgData);
+                                     if (outcome) {
+                                         const isDuplicate = foundChars.some(c => Math.abs(c.x - x) < cellPixelWidth / 2 && Math.abs(c.y - y) < cellPixelHeight / 2);
+                                         if (!isDuplicate) foundChars.push({ outcome, x, y });
+                                     }
+                                 }
+                             }
+                             foundChars.sort((a, b) => {
+                                 const colA = Math.floor(a.x / cellPixelWidth); const colB = Math.floor(b.x / cellPixelWidth);
+                                 if (colA !== colB) return colA - colB;
+                                 return a.y - b.y;
+                             });
+
+                            onVisionUpdate({ outcome: latestChanLe, redCount }, foundChars.map(c => ({ outcome: c.outcome })));
+                            setDebugInfo({ status: `Đã ghi nhận: ${latestChanLe}. Chờ lượt mới...`, latestCoinCount: redCoinCount, historyChar: historyChanLe });
+                            setScanState('WAITING_FOR_TIMER_TO_APPEAR');
+                        }
+                        
                         if (isTimerVisible) {
-                            setDebugInfo(prev => ({ ...prev, status: `Đã chốt: ${polledResultRef.current}. Ghi nhận...` }));
-                            if (polledResultRef.current && polledResultRef.current !== (results[results.length-1]?.outcome)) {
-                                runFullScan(polledResultRef.current);
-                            }
-                            polledResultRef.current = null;
-                            setScanState('WAITING_FOR_TIMER_END');
-                        } else {
-                            const r = settings.latest;
-                            const latestImageData = ctx.getImageData((r.x / 100) * canvas.width, (r.y / 100) * canvas.height, (r.width / 100) * canvas.width, (r.height / 100) * canvas.height);
-                            const currentResult = recognizeCharacter(latestImageData);
-                            if (currentResult) {
-                                polledResultRef.current = currentResult;
-                                setDebugInfo(prev => ({ ...prev, status: `Quét liên tục (thấy: ${currentResult})` }));
-                            }
+                            setScanState('WAITING_FOR_TIMER_TO_DISAPPEAR');
                         }
                         break;
+                    
+                    case 'WAITING_FOR_TIMER_TO_APPEAR':
+                        if (isTimerVisible) {
+                            setScanState('WAITING_FOR_TIMER_TO_DISAPPEAR');
+                            setDebugInfo(prev => ({...prev, status: 'Chờ đồng hồ chạy...'}));
+                        }
+                        break;
+
                     default:
                         setScanState('IDLE');
                 }
-            }, 250); // Scan 4 times per second for faster polling
+            }, 1000); 
         }
         return () => clearInterval(intervalId);
     }, [isCapturing, settings, scanState, results]); 
@@ -475,7 +492,8 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                         <div className="grid grid-cols-6 gap-2">
                             {results.slice(-6).map((result, index) => (
                                 <div key={`${result.flip}-${index}`} className={`flex flex-col items-center justify-center w-full h-12 rounded font-mono font-bold text-lg ${getDisplayClass(result.outcome)}`}>
-                                    <span>{result.outcome === 'Chẵn' ? 'C' : 'L'}</span>
+                                     <span>{result.outcome === 'Chẵn' ? 'C' : 'L'}</span>
+                                     <span className="text-xs opacity-80">{result.redCount}</span>
                                 </div>
                             ))}
                         </div>
@@ -485,7 +503,8 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                      <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Bảng Trạng thái AI</h4>
                      <div className="space-y-1">
                         <p><strong>Trạng thái:</strong> <span className="font-mono text-blue-600">{debugInfo.status}</span></p>
-                        <p><strong>Kết quả quét:</strong> <span className="font-mono text-blue-600">{debugInfo.lastOutcome}</span></p>
+                        <p><strong>Quét Đồng xu:</strong> <span className="font-mono text-blue-600">{debugInfo.latestCoinCount}</span></p>
+                        <p><strong>Quét Lịch sử:</strong> <span className="font-mono text-blue-600">{debugInfo.historyChar}</span></p>
                      </div>
                 </div>
             </div>
@@ -713,6 +732,7 @@ export default function App() {
     const newFullResults = newHistory.map((res, index) => ({
         flip: index + 1,
         outcome: res.outcome,
+        redCount: res.redCount,
         timestamp: new Date().toLocaleTimeString(),
         isFromVision: true,
         predictionAtFlip: (index === newHistory.length - 1) ? prediction : null
