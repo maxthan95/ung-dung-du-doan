@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, Video, VideoOff, ScanEye, CheckCircle, XCircle, Grid, RotateCcw, TrendingUp, Settings, MousePointerClick, RefreshCw, PlayCircle, PauseCircle, Timer } from 'lucide-react';
+import { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, Video, VideoOff, ScanEye, CheckCircle, XCircle, Grid, RotateCcw, TrendingUp, Settings, MousePointerClick, RefreshCw, PlayCircle, PauseCircle } from 'lucide-react';
 
 // --- HELPER COMPONENTS ---
 
 const Icon = ({ name, ...props }) => {
-    const icons = { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, Video, VideoOff, ScanEye, CheckCircle, XCircle, Grid, RotateCcw, TrendingUp, Settings, MousePointerClick, RefreshCw, PlayCircle, PauseCircle, Timer };
+    const icons = { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, Video, VideoOff, ScanEye, CheckCircle, XCircle, Grid, RotateCcw, TrendingUp, Settings, MousePointerClick, RefreshCw, PlayCircle, PauseCircle };
     const LucideIcon = icons[name];
     return LucideIcon ? <LucideIcon {...props} /> : null;
 };
@@ -42,7 +42,7 @@ const AIPredictionDisplay = ({ prediction, analysis, isAnalyzing, isPredictionRu
             <div>
                 <div className="text-center mb-6">
                     <p className="text-sm text-gray-500">Dự đoán Tối ưu</p>
-                    <div className={`text-6xl font-bold my-2 ${isChan ? 'text-blue-600' : 'text-orange-500'}`}>{prediction.value.toUpperCase()}</div>
+                    <div className={`text-6xl font-bold my-2 ${isChan ? 'text-blue-600' : 'text-red-600'}`}>{prediction.value.toUpperCase()}</div>
                     <div className="flex items-center justify-center space-x-2 bg-green-100 text-green-700 px-3 py-1 rounded-full w-fit mx-auto">
                         <Icon name="Target" className="w-4 h-4" />
                         <span className="text-sm font-medium">Độ tin cậy: {prediction.confidence}%</span>
@@ -306,6 +306,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
             for (let col = 0; col < settings.cols; col++) {
                 const x = (h.x / 100) * canvas.width + col * cellPixelWidth;
                 const y = (h.y / 100) * canvas.height + row * cellPixelHeight;
+                // Scan a smaller area inside the cell to avoid borders
                 const itemImageData = ctx.getImageData(x + cellPixelWidth * 0.1, y + cellPixelHeight * 0.1, cellPixelWidth * 0.8, cellPixelHeight * 0.8);
                 const digit = recognizeDigitInHistory(itemImageData);
                 const outcome = toChanLe(digit);
@@ -318,7 +319,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
         const lastAppHistoryString = results.map(r => r.outcome).join('');
         const newHistoryString = historyResults.map(r => r.outcome).join('');
 
-        if (newHistoryString !== lastAppHistoryString) {
+        if (newHistoryString && newHistoryString !== lastAppHistoryString) {
             onVisionUpdate(historyResults);
             setDebugInfo({ status: 'Đã cập nhật.', lastOutcome: historyResults.length > 0 ? historyResults[historyResults.length - 1].outcome : 'N/A' });
         } else {
