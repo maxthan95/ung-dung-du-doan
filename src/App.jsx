@@ -288,7 +288,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
     });
 
     const [debugInfo, setDebugInfo] = useState({ status: 'Đã dừng', lastOutcome: 'N/A' });
-    const lastHistoryHash = useRef(null);
+    const polledResultRef = useRef(null);
 
     const recognizeCharacter = (imageData) => {
         const data = imageData.data;
@@ -299,25 +299,13 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
         const pixelCount = data.length / 4;
         r /= pixelCount; g /= pixelCount; b /= pixelCount;
 
-        // 'C' is Blue
         if (b > r + 20 && b > g + 20) return 'Chẵn';
-        // 'L' is Red
         if (r > 150 && g < 100 && b < 100) return 'Lẻ';
-        
         return null;
     };
     
-    const getHistoryHash = (ctx) => {
-        const h = settings.history;
-        if (!h) return null;
-        const imageData = ctx.getImageData((h.x / 100) * ctx.canvas.width, (h.y / 100) * ctx.canvas.height, (h.width / 100) * ctx.canvas.width, (h.height / 100) * ctx.canvas.height);
-        return imageData.data.reduce((a, b) => a + b, 0);
-    };
-
-    const runFullScan = () => {
+    const runFullScan = (finalResult) => {
         if (!isCapturing || !videoRef.current || videoRef.current.readyState < 2) return;
-
-        setDebugInfo({ status: 'Đang quét...', lastOutcome: 'N/A' });
         
         const video = videoRef.current;
         const canvas = canvasRef.current;
@@ -325,13 +313,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
         canvas.width = video.videoWidth; 
         canvas.height = video.videoHeight;
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        // Scan latest result
-        const r = settings.latest;
-        const latestImageData = ctx.getImageData((r.x / 100) * canvas.width, (r.y / 100) * canvas.height, (r.width / 100) * canvas.width, (r.height / 100) * canvas.height);
-        const currentResult = recognizeCharacter(latestImageData);
         
-        // Scan history
         const h = settings.history;
         const historyResults = [];
         const cellPixelWidth = (settings.cellWidth / 100) * canvas.width;
@@ -349,7 +331,6 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                 );
                 const outcome = recognizeCharacter(itemImageData);
                 if (outcome) {
-                     // Avoid adding duplicates that are too close
                     const isDuplicate = foundChars.some(c => Math.abs(c.x - x) < cellPixelWidth / 2 && Math.abs(c.y - y) < cellPixelHeight / 2);
                     if (!isDuplicate) {
                         foundChars.push({ outcome, x, y });
@@ -358,7 +339,6 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
             }
         }
         
-        // Sort characters into columns
         foundChars.sort((a, b) => {
             const colA = Math.floor(a.x / cellPixelWidth);
             const colB = Math.floor(b.x / cellPixelWidth);
@@ -366,9 +346,8 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
             return a.y - b.y;
         });
 
-        onVisionUpdate({ outcome: currentResult }, foundChars.map(c => ({ outcome: c.outcome })));
-        lastHistoryHash.current = getHistoryHash(ctx);
-        setDebugInfo({ status: 'Quét xong.', lastOutcome: currentResult });
+        onVisionUpdate({ outcome: finalResult }, foundChars.map(c => ({ outcome: c.outcome })));
+        setDebugInfo({ status: 'Quét xong.', lastOutcome: finalResult });
     };
 
 
@@ -378,8 +357,8 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
             setStream(mediaStream);
             if (videoRef.current) videoRef.current.srcObject = mediaStream;
             setIsCapturing(true);
-            setScanState('WAITING_FOR_TIMER_START');
-            setDebugInfo({ status: 'Chờ đồng hồ bắt đầu...', lastOutcome: 'N/A' });
+            setScanState('WAITING_FOR_TIMER_END');
+            setDebugInfo({ status: 'Chờ đồng hồ kết thúc...', lastOutcome: 'N/A' });
             if (!settings.latest || !settings.history || !settings.timer) {
                 setIsSettingsOpen(true);
             }
@@ -418,33 +397,37 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                     return sum / (data.length/4);
                 }
                 const currentBrightness = averageBrightness(timerImageData);
-                const isTimerActive = currentBrightness > 50; 
+                const isTimerVisible = currentBrightness > 50; 
 
                 switch (scanState) {
-                    case 'WAITING_FOR_TIMER_START':
-                        if (isTimerActive) {
-                            setDebugInfo(prev => ({ ...prev, status: 'Đang chờ đồng hồ kết thúc...' }));
-                            setScanState('WAITING_FOR_TIMER_END');
-                        }
-                        break;
                     case 'WAITING_FOR_TIMER_END':
-                        if (!isTimerActive) {
-                            setDebugInfo(prev => ({ ...prev, status: 'Chờ lịch sử thay đổi...' }));
-                            setScanState('SCANNING_FOR_CHANGE');
+                        if (!isTimerVisible) {
+                            setDebugInfo(prev => ({ ...prev, status: 'Quét liên tục chờ kết quả...' }));
+                            setScanState('POLLING_FOR_RESULT');
                         }
                         break;
-                    case 'SCANNING_FOR_CHANGE':
-                        const currentHistoryHash = getHistoryHash(ctx);
-                        if (lastHistoryHash.current !== null && currentHistoryHash !== lastHistoryHash.current) {
-                           setDebugInfo(prev => ({ ...prev, status: 'Lịch sử đã đổi. Ghi nhận...' }));
-                           runFullScan();
-                           setScanState('WAITING_FOR_TIMER_START');
+                    case 'POLLING_FOR_RESULT':
+                        if (isTimerVisible) {
+                            setDebugInfo(prev => ({ ...prev, status: `Đã chốt: ${polledResultRef.current}. Ghi nhận...` }));
+                            if (polledResultRef.current && polledResultRef.current !== (results[results.length-1]?.outcome)) {
+                                runFullScan(polledResultRef.current);
+                            }
+                            polledResultRef.current = null;
+                            setScanState('WAITING_FOR_TIMER_END');
+                        } else {
+                            const r = settings.latest;
+                            const latestImageData = ctx.getImageData((r.x / 100) * canvas.width, (r.y / 100) * canvas.height, (r.width / 100) * canvas.width, (r.height / 100) * canvas.height);
+                            const currentResult = recognizeCharacter(latestImageData);
+                            if (currentResult) {
+                                polledResultRef.current = currentResult;
+                                setDebugInfo(prev => ({ ...prev, status: `Quét liên tục (thấy: ${currentResult})` }));
+                            }
                         }
                         break;
                     default:
                         setScanState('IDLE');
                 }
-            }, 500);
+            }, 250); // Scan 4 times per second for faster polling
         }
         return () => clearInterval(intervalId);
     }, [isCapturing, settings, scanState, results]); 
@@ -466,10 +449,6 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
             <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-teal-800">🔬 Phân tích Vision AI</h2>
                 <div className="flex items-center gap-2">
-                    <button onClick={runFullScan} disabled={!isCapturing} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-white bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed" title="Quét thủ công">
-                        <Icon name="MousePointerClick" size={16} />
-                        <span>Quét thủ công</span>
-                    </button>
                     <button onClick={() => setIsSettingsOpen(true)} disabled={!isCapturing} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-white bg-yellow-500 hover:bg-yellow-600 disabled:opacity-50 disabled:cursor-not-allowed" title="Cài đặt khu vực">
                         <Icon name="Settings" size={16} />
                         <span>Cài đặt</span>
