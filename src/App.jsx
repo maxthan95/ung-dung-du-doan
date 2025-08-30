@@ -294,17 +294,8 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
     });
 
     const wasTimerRunning = useRef(false);
+    const [debugInfo, setDebugInfo] = useState({ status: 'Đã dừng', lastDigit: 'N/A', lastOutcome: 'N/A' });
 
-    const isTimerFinished = (imageData) => {
-        const data = imageData.data; let darkPixels = 0;
-        for (let i = 0; i < data.length; i += 4) {
-            const brightness = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-            if (brightness < 50) darkPixels++;
-        }
-        // If the timer area is mostly dark, assume it's at 0 or finished
-        return (darkPixels / (data.length / 4)) > 0.7; 
-    };
-    
     const recognizeDigit = (imageData) => {
         const data = imageData.data; let r = 0, g = 0, b = 0;
         for (let i = 0; i < data.length; i += 4) { r += data[i]; g += data[i + 1]; b += data[i + 2]; }
@@ -323,6 +314,48 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
         return [0, 2, 4].includes(digit) ? 'Chẵn' : 'Lẻ';
     };
 
+    const runFullScan = () => {
+        if (!isCapturing || !videoRef.current || videoRef.current.readyState < 2) {
+            alert("Chưa bắt đầu ghi hình hoặc video chưa sẵn sàng.");
+            return;
+        }
+
+        setDebugInfo({ status: 'Đang quét thủ công...', lastDigit: 'N/A', lastOutcome: 'N/A' });
+        
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        canvas.width = video.videoWidth; 
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        const r = settings.latest;
+        const latestImageData = ctx.getImageData((r.x / 100) * canvas.width, (r.y / 100) * canvas.height, (r.width / 100) * canvas.width, (r.height / 100) * canvas.height);
+        const currentDigit = recognizeDigit(latestImageData);
+        const currentResult = toChanLe(currentDigit);
+        
+        setDebugInfo({ status: 'Hoàn tất quét.', lastDigit: currentDigit, lastOutcome: currentResult });
+
+        if (currentResult !== null) {
+            const h = settings.history;
+            const historyResults = [];
+            const cellWidth = ((h.width / 100) * canvas.width) / settings.cols;
+            const cellHeight = ((h.height / 100) * canvas.height) / settings.rows;
+
+            for (let row = 0; row < settings.rows; row++) {
+                for (let col = 0; col < settings.cols; col++) {
+                    const x = (h.x / 100) * canvas.width + col * cellWidth;
+                    const y = (h.y / 100) * canvas.height + row * cellHeight;
+                    const itemImageData = ctx.getImageData(x, y, cellWidth, cellHeight);
+                    const digit = recognizeDigit(itemImageData);
+                    const outcome = toChanLe(digit);
+                    if (outcome !== null) historyResults.push({outcome, redCount: digit});
+                }
+            }
+            onVisionUpdate({outcome: currentResult, redCount: currentDigit}, historyResults);
+        }
+    };
+
 
     const startCapture = async () => {
         try {
@@ -330,6 +363,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
             setStream(mediaStream);
             if (videoRef.current) videoRef.current.srcObject = mediaStream;
             setIsCapturing(true);
+            setDebugInfo({ status: 'Đang chờ đồng hồ...', lastDigit: 'N/A', lastOutcome: 'N/A' });
             if (!settings.latest || !settings.history || !settings.timer) {
                 setIsSettingsOpen(true);
             }
@@ -339,6 +373,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
     const stopCapture = () => {
         if (stream) stream.getTracks().forEach(track => track.stop());
         setStream(null); setIsCapturing(false); wasTimerRunning.current = false;
+        setDebugInfo({ status: 'Đã dừng', lastDigit: 'N/A', lastOutcome: 'N/A' });
     };
 
     const handleSaveSettings = (newSettings) => {
@@ -360,44 +395,29 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
 
                 const t = settings.timer;
                 const timerImageData = ctx.getImageData((t.x / 100) * canvas.width, (t.y / 100) * canvas.height, (t.width / 100) * canvas.width, (t.height / 100) * canvas.height);
-                const timerFinished = isTimerFinished(timerImageData);
+                // Simple timer logic: check for significant change, e.g., numbers appearing/disappearing
+                const averageBrightness = (imageData) => {
+                    const data = imageData.data; let sum = 0;
+                    for(let i=0; i<data.length; i+=4) sum += (data[i]+data[i+1]+data[i+2])/3;
+                    return sum / (data.length/4);
+                }
+                const currentBrightness = averageBrightness(timerImageData);
+                
+                const isTimerActive = currentBrightness > 40; // Assume timer is running if not mostly black
 
-                if (!timerFinished) {
+                if (isTimerActive) {
                     wasTimerRunning.current = true;
+                    setDebugInfo(prev => ({ ...prev, status: 'Đang chờ đồng hồ...' }));
                 }
                 
-                if (timerFinished && wasTimerRunning.current) {
+                if (!isTimerActive && wasTimerRunning.current) {
                     wasTimerRunning.current = false; // Trigger only once per cycle
-                    
-                    const r = settings.latest;
-                    const latestImageData = ctx.getImageData((r.x / 100) * canvas.width, (r.y / 100) * canvas.height, (r.width / 100) * canvas.width, (r.height / 100) * canvas.height);
-                    const currentDigit = recognizeDigit(latestImageData);
-                    const currentResult = toChanLe(currentDigit);
-
-                    const lastAppResult = results.length > 0 ? results[results.length - 1].outcome : null;
-                    if (currentResult !== null && currentResult !== lastAppResult) {
-                        const h = settings.history;
-                        const historyResults = [];
-                        const cellWidth = ((h.width / 100) * canvas.width) / settings.cols;
-                        const cellHeight = ((h.height / 100) * canvas.height) / settings.rows;
-
-                        for (let row = 0; row < settings.rows; row++) {
-                            for (let col = 0; col < settings.cols; col++) {
-                                const x = (h.x / 100) * canvas.width + col * cellWidth;
-                                const y = (h.y / 100) * canvas.height + row * cellHeight;
-                                const itemImageData = ctx.getImageData(x, y, cellWidth, cellHeight);
-                                const digit = recognizeDigit(itemImageData);
-                                const outcome = toChanLe(digit);
-                                if (outcome !== null) historyResults.push({outcome, redCount: digit});
-                            }
-                        }
-                        onVisionUpdate({outcome: currentResult, redCount: currentDigit}, historyResults);
-                    }
+                    runFullScan();
                 }
-            }, 500); // Check twice per second
+            }, 1000); // Check once per second
         }
         return () => clearInterval(intervalId);
-    }, [isCapturing, settings, onVisionUpdate, results]);
+    }, [isCapturing, settings, results]); // Removed onVisionUpdate dependency to avoid re-creating interval
 
     const getRegionStyle = (region) => {
         if (!region) return {};
@@ -416,6 +436,10 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
             <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-teal-800">🔬 Phân tích Vision AI</h2>
                 <div className="flex items-center gap-2">
+                    <button onClick={runFullScan} disabled={!isCapturing} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-white bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed" title="Quét thủ công">
+                        <Icon name="MousePointerClick" size={16} />
+                        <span>Quét thủ công</span>
+                    </button>
                     <button onClick={() => setIsSettingsOpen(true)} disabled={!isCapturing} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-white bg-yellow-500 hover:bg-yellow-600 disabled:opacity-50 disabled:cursor-not-allowed" title="Cài đặt khu vực">
                         <Icon name="Settings" size={16} />
                         <span>Cài đặt</span>
@@ -435,17 +459,27 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                     {settings.timer && <div className="absolute border-2 border-cyan-400" style={getRegionStyle(settings.timer)} />}
                 </div>
             </div>
-            <div className="mt-4">
-                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">6 Kết quả Gần nhất (từ Vision)</h4>
-                <div className="bg-gray-100 p-2 rounded-lg">
-                    <div className="grid grid-cols-6 gap-2">
-                        {results.slice(-6).map((result, index) => (
-                            <div key={`${result.flip}-${index}`} className={`flex flex-col items-center justify-center w-full h-12 rounded font-mono font-bold text-lg ${getDisplayClass(result.outcome)}`}>
-                                <span>{result.outcome === 'Chẵn' ? 'C' : 'L'}</span>
-                                <span className="text-xs opacity-80">{result.redCount}</span>
-                            </div>
-                        ))}
+             <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">6 Kết quả Gần nhất</h4>
+                    <div className="bg-gray-100 p-2 rounded-lg">
+                        <div className="grid grid-cols-6 gap-2">
+                            {results.slice(-6).map((result, index) => (
+                                <div key={`${result.flip}-${index}`} className={`flex flex-col items-center justify-center w-full h-12 rounded font-mono font-bold text-lg ${getDisplayClass(result.outcome)}`}>
+                                    <span>{result.outcome === 'Chẵn' ? 'C' : 'L'}</span>
+                                    <span className="text-xs opacity-80">{result.redCount}</span>
+                                </div>
+                            ))}
+                        </div>
                     </div>
+                </div>
+                <div className="bg-gray-100 p-3 rounded-lg text-sm">
+                     <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Bảng Trạng thái AI</h4>
+                     <div className="space-y-1">
+                        <p><strong>Trạng thái:</strong> <span className="font-mono text-blue-600">{debugInfo.status}</span></p>
+                        <p><strong>Số nhận diện:</strong> <span className="font-mono text-blue-600">{debugInfo.lastDigit}</span></p>
+                        <p><strong>Kết quả Chẵn/Lẻ:</strong> <span className="font-mono text-blue-600">{debugInfo.lastOutcome}</span></p>
+                     </div>
                 </div>
             </div>
         </div>
@@ -607,7 +641,8 @@ export default function App() {
   };
 
   const handleVisionUpdate = (latestResult, historyResults) => {
-    const outcomes = results.map(r => r.outcome);
+    const currentFullHistory = results;
+    const outcomes = currentFullHistory.map(r => r.outcome);
     
     const newPerformance = { ...modelPerformance };
     if (outcomes.length > 1) {
@@ -674,7 +709,7 @@ export default function App() {
         redCount: res.redCount,
         timestamp: new Date().toLocaleTimeString(),
         isFromVision: true,
-        predictionAtFlip: prediction
+        predictionAtFlip: (index === newHistory.length - 1) ? prediction : null
     }));
     setResults(newFullResults);
   };
@@ -692,6 +727,9 @@ export default function App() {
     localStorage.setItem('chanLeModelPerformance', JSON.stringify(modelPerformance));
     if (isPredictionRunning) {
         analyzeAndPredict(results);
+    } else {
+        setPrediction(null);
+        setAnalysis(null);
     }
   }, [results, isPredictionRunning]);
 
