@@ -42,7 +42,7 @@ const AIPredictionDisplay = ({ prediction, analysis, isAnalyzing, isPredictionRu
             <div>
                 <div className="text-center mb-6">
                     <p className="text-sm text-gray-500">Dự đoán Tối ưu</p>
-                    <div className={`text-6xl font-bold my-2 ${isChan ? 'text-blue-600' : 'text-orange-500'}`}>{prediction.value.toUpperCase()}</div>
+                    <div className={`text-6xl font-bold my-2 ${isChan ? 'text-blue-600' : 'text-red-600'}`}>{prediction.value.toUpperCase()}</div>
                     <div className="flex items-center justify-center space-x-2 bg-green-100 text-green-700 px-3 py-1 rounded-full w-fit mx-auto">
                         <Icon name="Target" className="w-4 h-4" />
                         <span className="text-sm font-medium">Độ tin cậy: {prediction.confidence}%</span>
@@ -90,9 +90,9 @@ const AIPredictionDisplay = ({ prediction, analysis, isAnalyzing, isPredictionRu
 const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialSettings }) => {
     const videoRef = useRef(null);
     const overlayRef = useRef(null);
-    const [setupStep, setSetupStep] = useState('drawingLatest');
+    const [setupStep, setSetupStep] = useState('drawingHistory');
     const [tempRegion, setTempRegion] = useState(null);
-    const [localSettings, setLocalSettings] = useState(initialSettings || { latest: null, history: null, timer: null, cellWidth: 2, cellHeight: 4 });
+    const [localSettings, setLocalSettings] = useState(initialSettings || { history: null, timer: null, cellWidth: 2, cellHeight: 4 });
     
     const [action, setAction] = useState({ type: 'none' });
 
@@ -101,8 +101,8 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialSettings 
             videoRef.current.srcObject = stream;
         }
         if (isOpen) {
-            setLocalSettings(initialSettings || { latest: null, history: null, timer: null, cellWidth: 2, cellHeight: 4 });
-            setSetupStep('drawingLatest');
+            setLocalSettings(initialSettings || { history: null, timer: null, cellWidth: 2, cellHeight: 4 });
+            setSetupStep('drawingHistory');
         }
     }, [isOpen, stream, initialSettings]);
 
@@ -120,7 +120,7 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialSettings 
             return;
         }
         
-        for (const type of ['latest', 'history', 'timer']) {
+        for (const type of ['history', 'timer']) {
             const region = localSettings[type];
             if (region && x > region.x && x < region.x + region.width && y > region.y && y < region.y + region.height) {
                 setAction({ type: 'moving', region: type, startX: x, startY: y, initialRegion: region });
@@ -171,10 +171,7 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialSettings 
 
     const handleMouseUp = () => {
         if (action.type === 'drawing' && tempRegion && tempRegion.width > 0.5 && tempRegion.height > 0.5) {
-            if (setupStep === 'drawingLatest') {
-                setLocalSettings(prev => ({ ...prev, latest: tempRegion }));
-                setSetupStep('drawingHistory');
-            } else if (setupStep === 'drawingHistory') {
+            if (setupStep === 'drawingHistory') {
                 setLocalSettings(prev => ({ ...prev, history: tempRegion }));
                 setSetupStep('drawingTimer');
             } else if (setupStep === 'drawingTimer') {
@@ -193,10 +190,7 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialSettings 
 
     const handleRedraw = (regionToRedraw) => {
         setLocalSettings(prev => ({ ...prev, [regionToRedraw]: null }));
-        setSetupStep(
-            regionToRedraw === 'latest' ? 'drawingLatest' : 
-            regionToRedraw === 'history' ? 'drawingHistory' : 'drawingTimer'
-        );
+        setSetupStep(regionToRedraw === 'history' ? 'drawingHistory' : 'drawingTimer');
     };
 
     const getRegionStyle = (region) => {
@@ -244,24 +238,22 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialSettings 
                     <div className="md:col-span-2 relative bg-gray-900 rounded-lg overflow-hidden w-full" style={{ paddingBottom: '56.25%' }}>
                         <video ref={videoRef} autoPlay muted className="absolute top-0 left-0 w-full h-full object-contain" />
                         <div ref={overlayRef} className="absolute inset-0 cursor-crosshair" onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}>
-                            <ResizableBox region={localSettings.latest} type="latest" color="border-yellow-400" />
                             <ResizableBox region={localSettings.history} type="history" color="border-purple-400" />
                             <ResizableBox region={localSettings.timer} type="timer" color="border-cyan-400" />
                             {tempRegion && <div className="absolute border-4 border-dashed border-white bg-white bg-opacity-20 z-10" style={getRegionStyle(tempRegion)} />}
                         </div>
                     </div>
                     <div className="flex flex-col justify-center space-y-4">
-                        <Step title="Bước 1: Vẽ vùng [4 Đồng xu]" isComplete={!!localSettings.latest} isActive={setupStep === 'drawingLatest'} onRedraw={() => handleRedraw('latest')} />
-                        <Step title="Bước 2: Vẽ vùng [Lịch sử]" isComplete={!!localSettings.history} isActive={setupStep === 'drawingHistory'} onRedraw={() => handleRedraw('history')}>
+                        <Step title="Bước 1: Vẽ vùng [Lịch sử]" isComplete={!!localSettings.history} isActive={setupStep === 'drawingHistory'} onRedraw={() => handleRedraw('history')}>
                             <div className="mt-2 flex gap-2 items-center text-sm">
                                 <label>Kích thước ô (%):</label>
                                 <input type="number" placeholder="Rộng" value={localSettings.cellWidth} onChange={e => setLocalSettings(p => ({...p, cellWidth: parseFloat(e.target.value) || 1}))} className="w-full p-1 border rounded" />
                                 <input type="number" placeholder="Cao" value={localSettings.cellHeight} onChange={e => setLocalSettings(p => ({...p, cellHeight: parseFloat(e.target.value) || 1}))} className="w-full p-1 border rounded" />
                             </div>
                         </Step>
-                        <Step title="Bước 3: Vẽ vùng [Đồng hồ]" isComplete={!!localSettings.timer} isActive={setupStep === 'drawingTimer'} onRedraw={() => handleRedraw('timer')} />
+                        <Step title="Bước 2: Vẽ vùng [Đồng hồ]" isComplete={!!localSettings.timer} isActive={setupStep === 'drawingTimer'} onRedraw={() => handleRedraw('timer')} />
                         <div className="mt-4 flex flex-col gap-2">
-                            <button onClick={handleSave} disabled={!localSettings.latest || !localSettings.history || !localSettings.timer} className="w-full px-4 py-2 rounded-lg text-sm text-white bg-teal-500 hover:bg-teal-600 disabled:bg-gray-400">Lưu & Áp dụng</button>
+                            <button onClick={handleSave} disabled={!localSettings.history || !localSettings.timer} className="w-full px-4 py-2 rounded-lg text-sm text-white bg-teal-500 hover:bg-teal-600 disabled:bg-gray-400">Lưu & Áp dụng</button>
                             <button onClick={onClose} className="w-full px-4 py-2 rounded-lg text-sm bg-gray-200 hover:bg-gray-300">Hủy</button>
                         </div>
                     </div>
@@ -283,25 +275,12 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
     const [settings, setSettings] = useState(() => {
         try {
             const saved = localStorage.getItem('visionSettingsChanLe');
-            return saved ? JSON.parse(saved) : { latest: null, history: null, timer: null, cellWidth: 2, cellHeight: 4 };
-        } catch { return { latest: null, history: null, timer: null, cellWidth: 2, cellHeight: 4 }; }
+            return saved ? JSON.parse(saved) : { history: null, timer: null, cellWidth: 2, cellHeight: 4 };
+        } catch { return { history: null, timer: null, cellWidth: 2, cellHeight: 4 }; }
     });
 
-    const [debugInfo, setDebugInfo] = useState({ status: 'Đã dừng', latestCoinCount: 'N/A', historyChar: 'N/A' });
-    
-    const recognizeCoinColor = (imageData) => {
-        const data = imageData.data;
-        let r = 0, g = 0, b = 0;
-        for (let i = 0; i < data.length; i += 4) {
-            r += data[i]; g += data[i + 1]; b += data[i + 2];
-        }
-        const pixelCount = data.length / 4;
-        r /= pixelCount; g /= pixelCount; b /= pixelCount;
-
-        if (r > 150 && g < 100 && b < 100) return 'Red';
-        if (r > 180 && g > 180 && b > 180) return 'White';
-        return 'Unknown';
-    };
+    const [debugInfo, setDebugInfo] = useState({ status: 'Đã dừng', historyChar: 'N/A' });
+    const lastHistoryHash = useRef(null);
 
     const recognizeHistoryChar = (imageData) => {
         const data = imageData.data;
@@ -317,10 +296,59 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
         return null;
     };
     
-    const toChanLe = (digit) => {
-        if (digit === null) return null;
-        return [0, 2, 4].includes(digit) ? 'Chẵn' : 'Lẻ';
+    const getHistoryHash = (ctx) => {
+        const h = settings.history;
+        if (!h) return null;
+        const imageData = ctx.getImageData((h.x / 100) * ctx.canvas.width, (h.y / 100) * ctx.canvas.height, (h.width / 100) * ctx.canvas.width, (h.height / 100) * ctx.canvas.height);
+        return imageData.data.reduce((a, b) => a + b, 0);
     };
+
+    const runFullScan = () => {
+        if (!isCapturing || !videoRef.current || videoRef.current.readyState < 2) return;
+        
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        canvas.width = video.videoWidth; 
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        const h = settings.history;
+        const cellPixelWidth = (settings.cellWidth / 100) * canvas.width;
+        const cellPixelHeight = (settings.cellHeight / 100) * canvas.height;
+        const historyPixelWidth = (h.width / 100) * canvas.width;
+        
+        const foundChars = [];
+
+        for (let y = 0; y < (h.height / 100) * canvas.height - cellPixelHeight; y += cellPixelHeight / 2) {
+            for (let x = 0; x < historyPixelWidth - cellPixelWidth; x += cellPixelWidth / 2) {
+                const itemImageData = ctx.getImageData(
+                    (h.x / 100) * canvas.width + x,
+                    (h.y / 100) * canvas.height + y,
+                    cellPixelWidth, cellPixelHeight
+                );
+                const outcome = recognizeHistoryChar(itemImageData);
+                if (outcome) {
+                    const isDuplicate = foundChars.some(c => Math.abs(c.x - x) < cellPixelWidth / 2 && Math.abs(c.y - y) < cellPixelHeight / 2);
+                    if (!isDuplicate) {
+                        foundChars.push({ outcome, x, y });
+                    }
+                }
+            }
+        }
+        
+        foundChars.sort((a, b) => {
+            const colA = Math.floor(a.x / cellPixelWidth);
+            const colB = Math.floor(b.x / cellPixelWidth);
+            if (colA !== colB) return colA - colB;
+            return a.y - b.y;
+        });
+
+        onVisionUpdate(foundChars.map(c => ({ outcome: c.outcome })));
+        lastHistoryHash.current = getHistoryHash(ctx);
+        setDebugInfo({ status: 'Quét xong.', historyChar: foundChars.length > 0 ? foundChars[foundChars.length-1].outcome : 'N/A' });
+    };
+
 
     const startCapture = async () => {
         try {
@@ -329,8 +357,8 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
             if (videoRef.current) videoRef.current.srcObject = mediaStream;
             setIsCapturing(true);
             setScanState('WAITING_FOR_TIMER_TO_DISAPPEAR');
-            setDebugInfo({ status: 'Chờ đồng hồ chạy...', latestCoinCount: 'N/A', historyChar: 'N/A' });
-            if (!settings.latest || !settings.history || !settings.timer) {
+            setDebugInfo({ status: 'Chờ đồng hồ chạy...', historyChar: 'N/A' });
+            if (!settings.history || !settings.timer) {
                 setIsSettingsOpen(true);
             }
         } catch (err) { alert("Không thể bắt đầu ghi hình. Vui lòng cấp quyền."); }
@@ -339,7 +367,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
     const stopCapture = () => {
         if (stream) stream.getTracks().forEach(track => track.stop());
         setStream(null); setIsCapturing(false); setScanState('IDLE');
-        setDebugInfo({ status: 'Đã dừng', latestCoinCount: 'N/A', historyChar: 'N/A' });
+        setDebugInfo({ status: 'Đã dừng', historyChar: 'N/A' });
     };
 
     const handleSaveSettings = (newSettings) => {
@@ -349,7 +377,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
 
     useEffect(() => {
         let intervalId;
-        if (isCapturing && settings.timer && settings.latest && settings.history) {
+        if (isCapturing && settings.timer && settings.history) {
             const video = videoRef.current;
             const canvas = canvasRef.current;
             const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -372,63 +400,18 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                 switch (scanState) {
                     case 'WAITING_FOR_TIMER_TO_DISAPPEAR':
                         if (!isTimerVisible) {
-                            setDebugInfo(prev => ({ ...prev, status: 'Quét và đối chiếu...' }));
-                            setScanState('SCANNING_AND_VALIDATING');
+                            setDebugInfo(prev => ({ ...prev, status: 'Chờ lịch sử cập nhật...' }));
+                            setScanState('WAITING_FOR_HISTORY_UPDATE');
                         }
                         break;
 
-                    case 'SCANNING_AND_VALIDATING':
-                        // Scan latest result (coins)
-                        const r = settings.latest;
-                        const latestRegionWidth = (r.width / 100) * canvas.width;
-                        const latestRegionHeight = (r.height / 100) * canvas.height;
-                        const coinWidth = latestRegionWidth / 2;
-                        const coinHeight = latestRegionHeight / 2;
-                        let redCoinCount = 0;
-                        const coinPositions = [{x: 0, y: 0}, {x: coinWidth, y: 0}, {x: 0, y: coinHeight}, {x: coinWidth, y: coinHeight}];
-                        for (const pos of coinPositions) {
-                            const imgData = ctx.getImageData((r.x / 100) * canvas.width + pos.x, (r.y / 100) * canvas.height + pos.y, coinWidth, coinHeight);
-                            if (recognizeCoinColor(imgData) === 'Red') redCoinCount++;
+                    case 'WAITING_FOR_HISTORY_UPDATE':
+                        const currentHistoryHash = getHistoryHash(ctx);
+                        if (lastHistoryHash.current !== null && currentHistoryHash !== lastHistoryHash.current) {
+                           setDebugInfo(prev => ({ ...prev, status: 'Lịch sử đã đổi. Ghi nhận...' }));
+                           runFullScan();
+                           setScanState('WAITING_FOR_TIMER_TO_APPEAR');
                         }
-                        const latestChanLe = toChanLe(redCoinCount);
-
-                        // Scan history (character)
-                        const h = settings.history;
-                        const cellPixelWidth = (settings.cellWidth / 100) * canvas.width;
-                        const cellPixelHeight = (settings.cellHeight / 100) * canvas.height;
-                        const itemImageData = ctx.getImageData((h.x / 100) * canvas.width, (h.y / 100) * canvas.height, cellPixelWidth, cellPixelHeight);
-                        const historyChanLe = recognizeHistoryChar(itemImageData);
-                        
-                        setDebugInfo({ status: 'Quét và đối chiếu...', latestCoinCount: `${redCoinCount} (${latestChanLe || ''})`, historyChar: historyChanLe || 'N/A' });
-                        
-                        const lastAppResult = results.length > 0 ? results[results.length - 1].outcome : null;
-
-                        if (latestChanLe && historyChanLe && latestChanLe === historyChanLe && latestChanLe !== lastAppResult) {
-                            // Validated!
-                             const fullHistoryResults = [];
-                             const historyPixelWidth = (h.width / 100) * canvas.width;
-                             const foundChars = [];
-                             for (let y = 0; y < (h.height / 100) * canvas.height - cellPixelHeight; y += cellPixelHeight / 2) {
-                                 for (let x = 0; x < historyPixelWidth - cellPixelWidth; x += cellPixelWidth / 2) {
-                                     const imgData = ctx.getImageData((h.x / 100) * canvas.width + x, (h.y / 100) * canvas.height + y, cellPixelWidth, cellPixelHeight);
-                                     const outcome = recognizeHistoryChar(imgData);
-                                     if (outcome) {
-                                         const isDuplicate = foundChars.some(c => Math.abs(c.x - x) < cellPixelWidth / 2 && Math.abs(c.y - y) < cellPixelHeight / 2);
-                                         if (!isDuplicate) foundChars.push({ outcome, x, y });
-                                     }
-                                 }
-                             }
-                             foundChars.sort((a, b) => {
-                                 const colA = Math.floor(a.x / cellPixelWidth); const colB = Math.floor(b.x / cellPixelWidth);
-                                 if (colA !== colB) return colA - colB;
-                                 return a.y - b.y;
-                             });
-
-                            onVisionUpdate({ outcome: latestChanLe, redCount }, foundChars.map(c => ({ outcome: c.outcome })));
-                            setDebugInfo({ status: `Đã ghi nhận: ${latestChanLe}. Chờ lượt mới...`, latestCoinCount: redCoinCount, historyChar: historyChanLe });
-                            setScanState('WAITING_FOR_TIMER_TO_APPEAR');
-                        }
-                        
                         if (isTimerVisible) {
                             setScanState('WAITING_FOR_TIMER_TO_DISAPPEAR');
                         }
@@ -480,7 +463,6 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                 <video ref={videoRef} autoPlay muted className="absolute top-0 left-0 w-full h-full object-contain" />
                 <canvas ref={canvasRef} className="hidden" />
                 <div className="absolute inset-0">
-                    {settings.latest && <div className="absolute border-2 border-yellow-400" style={getRegionStyle(settings.latest)} />}
                     {settings.history && <div className="absolute border-2 border-purple-400" style={getRegionStyle(settings.history)} />}
                     {settings.timer && <div className="absolute border-2 border-cyan-400" style={getRegionStyle(settings.timer)} />}
                 </div>
@@ -493,7 +475,6 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                             {results.slice(-6).map((result, index) => (
                                 <div key={`${result.flip}-${index}`} className={`flex flex-col items-center justify-center w-full h-12 rounded font-mono font-bold text-lg ${getDisplayClass(result.outcome)}`}>
                                      <span>{result.outcome === 'Chẵn' ? 'C' : 'L'}</span>
-                                     <span className="text-xs opacity-80">{result.redCount}</span>
                                 </div>
                             ))}
                         </div>
@@ -503,7 +484,6 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                      <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Bảng Trạng thái AI</h4>
                      <div className="space-y-1">
                         <p><strong>Trạng thái:</strong> <span className="font-mono text-blue-600">{debugInfo.status}</span></p>
-                        <p><strong>Quét Đồng xu:</strong> <span className="font-mono text-blue-600">{debugInfo.latestCoinCount}</span></p>
                         <p><strong>Quét Lịch sử:</strong> <span className="font-mono text-blue-600">{debugInfo.historyChar}</span></p>
                      </div>
                 </div>
@@ -666,9 +646,10 @@ export default function App() {
     }, 500);
   };
 
-  const handleVisionUpdate = (latestResult, historyResults) => {
+  const handleVisionUpdate = (historyResults) => {
     const currentFullHistory = results;
     const outcomes = currentFullHistory.map(r => r.outcome);
+    const latestResult = historyResults[historyResults.length - 1];
     
     const newPerformance = { ...modelPerformance };
     if (outcomes.length > 1) {
@@ -728,14 +709,12 @@ export default function App() {
         setModelPerformance(newPerformance);
     }
 
-    const newHistory = [...historyResults, latestResult];
-    const newFullResults = newHistory.map((res, index) => ({
+    const newFullResults = historyResults.map((res, index) => ({
         flip: index + 1,
         outcome: res.outcome,
-        redCount: res.redCount,
         timestamp: new Date().toLocaleTimeString(),
         isFromVision: true,
-        predictionAtFlip: (index === newHistory.length - 1) ? prediction : null
+        predictionAtFlip: (index === historyResults.length - 1) ? prediction : null
     }));
     setResults(newFullResults);
   };
