@@ -298,15 +298,23 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
     const lastHistoryHash = useRef(null);
 
     const recognizeDigit = (imageData) => {
-        const data = imageData.data; let r = 0, g = 0, b = 0;
-        for (let i = 0; i < data.length; i += 4) { r += data[i]; g += data[i + 1]; b += data[i + 2]; }
-        const pixelCount = data.length / 4; r /= pixelCount; g /= pixelCount; b /= pixelCount;
-        
-        if (r > 180 && g > 180 && b > 180) return 0; // White for 0
-        if (b > r && b > g && b > 100) return 1;    // Blue for 1
-        if (g > r && g > b && g > 100) return 2;    // Green for 2
-        if (r > 150 && g > 120 && b < 100) return 3; // Yellow for 3
-        if (r > 150 && g < 100 && b < 100) return 4; // Red for 4
+        const data = imageData.data;
+        let r = 0, g = 0, b = 0;
+        for (let i = 0; i < data.length; i += 4) {
+            r += data[i];
+            g += data[i + 1];
+            b += data[i + 2];
+        }
+        const pixelCount = data.length / 4;
+        r /= pixelCount;
+        g /= pixelCount;
+        b /= pixelCount;
+
+        if (r > 180 && g > 180 && b > 180) return 0; // Trắng
+        if (b > r + 20 && b > g + 20) return 1;    // Xanh dương
+        if (g > r + 20 && g > b + 20) return 2;    // Xanh lá
+        if (r > 150 && g > 120 && b < 100) return 3; // Vàng
+        if (r > 150 && g < 100 && b < 100) return 4; // Đỏ
         return null;
     };
     
@@ -319,7 +327,6 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
         const h = settings.history;
         if (!h) return null;
         const imageData = ctx.getImageData((h.x / 100) * ctx.canvas.width, (h.y / 100) * ctx.canvas.height, (h.width / 100) * ctx.canvas.width, (h.height / 100) * ctx.canvas.height);
-        // Simple hash: sum of all pixel values
         return imageData.data.reduce((a, b) => a + b, 0);
     };
 
@@ -418,23 +425,14 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                         break;
                     case 'WAITING_FOR_TIMER_END':
                         if (!isTimerActive) {
-                            setDebugInfo(prev => ({ ...prev, status: 'Quét liên tục chờ kết quả...' }));
-                            setScanState('POLLING_FOR_RESULT');
+                            setDebugInfo(prev => ({ ...prev, status: 'Chờ lịch sử thay đổi...' }));
+                            setScanState('SCANNING_FOR_CHANGE');
                         }
                         break;
-                    case 'POLLING_FOR_RESULT':
-                        const r = settings.latest;
-                        const latestImageData = ctx.getImageData((r.x / 100) * canvas.width, (r.y / 100) * canvas.height, (r.width / 100) * canvas.width, (r.height / 100) * canvas.height);
-                        const currentDigit = recognizeDigit(latestImageData);
-                        const currentResult = toChanLe(currentDigit);
-
-                        const lastAppResult = results.length > 0 ? results[results.length - 1].outcome : null;
+                    case 'SCANNING_FOR_CHANGE':
                         const currentHistoryHash = getHistoryHash(ctx);
-                        
-                        const isNewResultValid = currentResult !== null && currentResult !== lastAppResult;
-                        const hasHistoryChanged = lastHistoryHash.current !== null && currentHistoryHash !== lastHistoryHash.current;
-
-                        if (isNewResultValid && hasHistoryChanged) {
+                        if (lastHistoryHash.current !== null && currentHistoryHash !== lastHistoryHash.current) {
+                           setDebugInfo(prev => ({ ...prev, status: 'Lịch sử đã đổi. Ghi nhận...' }));
                            runFullScan();
                            setScanState('WAITING_FOR_TIMER_START');
                         }
@@ -442,7 +440,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                     default:
                         setScanState('IDLE');
                 }
-            }, 500); // Check twice per second
+            }, 500);
         }
         return () => clearInterval(intervalId);
     }, [isCapturing, settings, scanState, results]); 
