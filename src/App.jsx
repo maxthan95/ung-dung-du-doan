@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, CheckCircle, RotateCcw, TrendingUp, PlayCircle, PauseCircle, Video, VideoOff } from 'lucide-react';
+import { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, CheckCircle, RotateCcw, TrendingUp, PlayCircle, PauseCircle, Video, VideoOff, List, Grid as GridIcon } from 'lucide-react';
 
 // --- HELPER COMPONENTS ---
 
 const Icon = ({ name, ...props }) => {
-    const icons = { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, CheckCircle, RotateCcw, TrendingUp, PlayCircle, PauseCircle, Video, VideoOff };
+    const icons = { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, CheckCircle, RotateCcw, TrendingUp, PlayCircle, PauseCircle, Video, VideoOff, List, Grid: GridIcon };
     const LucideIcon = icons[name];
     return LucideIcon ? <LucideIcon {...props} /> : null;
 };
@@ -110,8 +110,8 @@ const ManualInput = ({ onNewResult }) => {
     );
 };
 
-// --- History Display Component (Grid Version) ---
-const HistoryDisplay = ({ results }) => {
+// --- History Display Components ---
+const GridHistoryDisplay = ({ results }) => {
     const gridRef = useRef(null);
 
     const getOutcomeClass = (outcome) => {
@@ -142,27 +142,71 @@ const HistoryDisplay = ({ results }) => {
         }
     }, [gridColumns]);
 
+    return (
+        <div ref={gridRef} className="bg-gray-100 p-2 rounded-lg overflow-x-auto flex flex-row-reverse gap-1">
+            {results.length > 0 ? (
+                gridColumns.slice().reverse().map((column, colIndex) => (
+                    <div key={colIndex} className="flex flex-col gap-1">
+                       {column.map(result => (
+                           <div 
+                               key={result.flip} 
+                               className={`w-8 h-8 rounded-md flex items-center justify-center font-bold text-sm ${getOutcomeClass(result.outcome)}`}
+                               title={`Lần #${result.flip}: ${result.redCount} đỏ`}
+                           >
+                               {result.outcome === 'Chẵn' ? 'C' : 'L'}
+                           </div>
+                       ))}
+                    </div>
+                ))
+            ) : <div className="text-center text-gray-500 py-8 w-full">Chưa có lịch sử.</div>}
+        </div>
+    );
+};
+
+const TableHistoryDisplay = ({ results }) => {
+    const endOfHistoryRef = useRef(null);
+
+    useEffect(() => {
+        endOfHistoryRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [results]);
+
+    const getOutcomeClass = (outcome) => {
+        if (outcome === 'Chẵn') return 'bg-blue-100 text-blue-800';
+        if (outcome === 'Lẻ') return 'bg-orange-100 text-orange-800';
+        return '';
+    };
 
     return (
-         <div className="bg-white rounded-xl shadow-lg p-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4">Lịch sử Kết quả (Dạng bệt)</h2>
-            <div ref={gridRef} className="bg-gray-100 p-2 rounded-lg overflow-x-auto flex flex-row-reverse gap-1">
-                {results.length > 0 ? (
-                    gridColumns.slice().reverse().map((column, colIndex) => (
-                        <div key={colIndex} className="flex flex-col gap-1">
-                           {column.map(result => (
-                               <div 
-                                   key={result.flip} 
-                                   className={`w-8 h-8 rounded-md flex items-center justify-center font-bold text-sm ${getOutcomeClass(result.outcome)}`}
-                                   title={`Lần #${result.flip}: ${result.redCount} đỏ`}
-                               >
-                                   {result.outcome === 'Chẵn' ? 'C' : 'L'}
-                               </div>
-                           ))}
-                        </div>
-                    ))
-                ) : <div className="text-center text-gray-500 py-8 w-full">Chưa có lịch sử.</div>}
-            </div>
+        <div className="max-h-[30rem] overflow-y-auto pr-2">
+            {results.length > 0 ? (
+                <table className="w-full text-sm text-left">
+                    <thead className="text-xs text-gray-700 uppercase bg-gray-50 sticky top-0">
+                        <tr>
+                            <th scope="col" className="px-6 py-3">Lần</th>
+                            <th scope="col" className="px-6 py-3">Số Đỏ</th>
+                            <th scope="col" className="px-6 py-3">Kết quả</th>
+                            <th scope="col" className="px-6 py-3">Thời gian</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {results.map((result) => (
+                            <tr key={result.flip} className="bg-white border-b">
+                                <th scope="row" className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">
+                                    #{result.flip}
+                                </th>
+                                <td className="px-6 py-4 font-bold">{result.redCount}</td>
+                                <td className="px-6 py-4">
+                                    <span className={`px-2 py-1 font-semibold rounded-full ${getOutcomeClass(result.outcome)}`}>
+                                        {result.outcome}
+                                    </span>
+                                </td>
+                                <td className="px-6 py-4">{result.timestamp}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            ) : <div className="text-center text-gray-500 py-8">Chưa có lịch sử.</div>}
+            <div ref={endOfHistoryRef} />
         </div>
     );
 };
@@ -220,6 +264,7 @@ export default function App() {
   const [patterns, setPatterns] = useState({});
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isPredictionRunning, setIsPredictionRunning] = useState(true);
+  const [historyView, setHistoryView] = useState('grid'); // 'grid' or 'table'
   
   const [modelPerformance, setModelPerformance] = useState(() => {
     try {
@@ -484,8 +529,15 @@ export default function App() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-             <div className="lg:col-span-2">
-                 <HistoryDisplay results={results} />
+             <div className="lg:col-span-2 bg-white rounded-xl shadow-lg p-6">
+                <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-semibold text-gray-800">Lịch sử Kết quả</h2>
+                    <div className="flex items-center gap-1 p-1 bg-gray-200 rounded-lg">
+                       <button onClick={() => setHistoryView('grid')} className={`px-3 py-1 text-sm font-semibold rounded-md ${historyView === 'grid' ? 'bg-white shadow' : 'text-gray-600'}`}>Dạng Bệt</button>
+                       <button onClick={() => setHistoryView('table')} className={`px-3 py-1 text-sm font-semibold rounded-md ${historyView === 'table' ? 'bg-white shadow' : 'text-gray-600'}`}>Dạng Bảng</button>
+                    </div>
+                </div>
+                {historyView === 'grid' ? <GridHistoryDisplay results={results} /> : <TableHistoryDisplay results={results} />}
             </div>
              <div className="space-y-6">
                 <StatCard iconName="Target" title="Độ chính xác AI" value={`${accuracyStats.accuracy.toFixed(1)}%`} footer={`${accuracyStats.correct}/${accuracyStats.total} đúng`} color="border-green-500" />
