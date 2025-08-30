@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, Video, VideoOff, ScanEye, CheckCircle, XCircle, Grid, RotateCcw, TrendingUp, Settings, MousePointerClick, RefreshCw, PlayCircle, PauseCircle } from 'lucide-react';
+import { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, CheckCircle, RotateCcw, TrendingUp, PlayCircle, PauseCircle } from 'lucide-react';
 
 // --- HELPER COMPONENTS ---
 
 const Icon = ({ name, ...props }) => {
-    const icons = { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, Video, VideoOff, ScanEye, CheckCircle, XCircle, Grid, RotateCcw, TrendingUp, Settings, MousePointerClick, RefreshCw, PlayCircle, PauseCircle };
+    const icons = { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, CheckCircle, RotateCcw, TrendingUp, PlayCircle, PauseCircle };
     const LucideIcon = icons[name];
     return LucideIcon ? <LucideIcon {...props} /> : null;
 };
@@ -42,7 +42,7 @@ const AIPredictionDisplay = ({ prediction, analysis, isAnalyzing, isPredictionRu
             <div>
                 <div className="text-center mb-6">
                     <p className="text-sm text-gray-500">Dự đoán Tối ưu</p>
-                    <div className={`text-6xl font-bold my-2 ${isChan ? 'text-blue-600' : 'text-red-600'}`}>{prediction.value.toUpperCase()}</div>
+                    <div className={`text-6xl font-bold my-2 ${isChan ? 'text-blue-600' : 'text-orange-500'}`}>{prediction.value.toUpperCase()}</div>
                     <div className="flex items-center justify-center space-x-2 bg-green-100 text-green-700 px-3 py-1 rounded-full w-fit mx-auto">
                         <Icon name="Target" className="w-4 h-4" />
                         <span className="text-sm font-medium">Độ tin cậy: {prediction.confidence}%</span>
@@ -86,335 +86,88 @@ const AIPredictionDisplay = ({ prediction, analysis, isAnalyzing, isPredictionRu
     );
 };
 
-// --- VISION SETTINGS MODAL ---
-const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialSettings }) => {
-    const videoRef = useRef(null);
-    const overlayRef = useRef(null);
-    const [tempRegion, setTempRegion] = useState(null);
-    const [localSettings, setLocalSettings] = useState(initialSettings || { history: null, rows: 3, cols: 5 });
-    
-    const [action, setAction] = useState({ type: 'none' });
 
-    useEffect(() => {
-        if (isOpen && stream && videoRef.current) {
-            videoRef.current.srcObject = stream;
-        }
-        if (isOpen) {
-            setLocalSettings(initialSettings || { history: null, rows: 3, cols: 5 });
-        }
-    }, [isOpen, stream, initialSettings]);
-
-    if (!isOpen) return null;
-
-    const handleMouseDown = (e) => {
-        const rect = overlayRef.current.getBoundingClientRect();
-        const x = (e.clientX - rect.left) / rect.width * 100;
-        const y = (e.clientY - rect.top) / rect.height * 100;
-
-        const handle = e.target.dataset.handle;
-        const regionType = e.target.dataset.region;
-        if (handle && regionType) {
-            setAction({ type: 'resizing', region: regionType, handle: handle, startX: x, startY: y, initialRegion: localSettings[regionType] });
-            return;
-        }
-        
-        const region = localSettings.history;
-        if (region && x > region.x && x < region.x + region.width && y > region.y && y < region.y + region.height) {
-            setAction({ type: 'moving', region: 'history', startX: x, startY: y, initialRegion: region });
-            return;
-        }
-        
-        setAction({ type: 'drawing', startX: x, startY: y });
-        setTempRegion({ x: x, y: y, width: 0, height: 0 });
+// --- Manual Input Component ---
+const ManualInput = ({ onNewResult }) => {
+    const handleButtonClick = (redCount) => {
+        onNewResult(redCount);
     };
 
-    const handleMouseMove = (e) => {
-        if (action.type === 'none') return;
-        
-        const rect = overlayRef.current.getBoundingClientRect();
-        const mouseX = (e.clientX - rect.left) / rect.width * 100;
-        const mouseY = (e.clientY - rect.top) / rect.height * 100;
-        const deltaX = mouseX - action.startX;
-        const deltaY = mouseY - action.startY;
-
-        if (action.type === 'drawing') {
-            const newWidth = Math.abs(mouseX - action.startX);
-            const newHeight = Math.abs(mouseY - action.startY);
-            const newX = Math.min(mouseX, action.startX);
-            const newY = Math.min(mouseY, action.startY);
-            setTempRegion({ x: newX, y: newY, width: newWidth, height: newHeight });
-        } else if (action.type === 'moving') {
-            const newX = action.initialRegion.x + deltaX;
-            const newY = action.initialRegion.y + deltaY;
-            setLocalSettings(prev => ({ ...prev, history: { ...prev.history, x: newX, y: newY } }));
-        } else if (action.type === 'resizing') {
-            const { initialRegion, handle } = action;
-            let { x, y, width, height } = initialRegion;
-
-            if (handle.includes('right')) width = Math.max(1, initialRegion.width + deltaX);
-            if (handle.includes('left')) {
-                width = Math.max(1, initialRegion.width - deltaX);
-                x = initialRegion.x + deltaX;
-            }
-            if (handle.includes('bottom')) height = Math.max(1, initialRegion.height + deltaY);
-            if (handle.includes('top')) {
-                height = Math.max(1, initialRegion.height - deltaY);
-                y = initialRegion.y + deltaY;
-            }
-            setLocalSettings(prev => ({ ...prev, history: { x, y, width, height } }));
-        }
-    };
-
-    const handleMouseUp = () => {
-        if (action.type === 'drawing' && tempRegion && tempRegion.width > 0.5 && tempRegion.height > 0.5) {
-            setLocalSettings(prev => ({ ...prev, history: tempRegion }));
-        }
-        setAction({ type: 'none' });
-        setTempRegion(null);
-    };
-
-    const handleSave = () => {
-        onSave(localSettings);
-        onClose();
-    };
-    
-    const getRegionStyle = (region) => {
-        if (!region) return {};
-        return { left: `${region.x}%`, top: `${region.y}%`, width: `${region.width}%`, height: `${region.height}%` };
-    };
-    
-    const ResizableBox = ({ region, type, color, grid }) => {
-        if (!region) return null;
-        const handles = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
-        return (
-            <div className={`absolute border-4 ${color} z-10`} style={getRegionStyle(region)}>
-                {handles.map(handle => (
-                    <div 
-                        key={handle}
-                        data-handle={handle}
-                        data-region={type}
-                        className="absolute w-4 h-4 bg-white border-2 border-gray-800 rounded-full -m-2"
-                        style={{
-                            top: handle.includes('top') ? '0%' : '100%',
-                            left: handle.includes('left') ? '0%' : '100%',
-                            cursor: `${handle.split('-')[0] === 'top' ? 'n' : 's'}${handle.split('-')[1] === 'left' ? 'w' : 'e'}-resize`,
-                        }}
-                    />
-                ))}
-                 {grid && (
-                    <div className="absolute inset-0 grid" style={{gridTemplateColumns: `repeat(${grid.cols}, 1fr)`, gridTemplateRows: `repeat(${grid.rows}, 1fr)`}}>
-                        {Array.from({ length: grid.rows * grid.cols }).map((_, i) => (
-                            <div key={i} className="border border-dashed border-white/30"></div>
-                        ))}
-                    </div>
-                )}
-            </div>
-        );
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-4xl">
-                <h2 className="text-xl font-bold text-gray-800 mb-4">Cài đặt Vùng quét</h2>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="md:col-span-2 relative bg-gray-900 rounded-lg overflow-hidden w-full" style={{ paddingBottom: '56.25%' }}>
-                        <video ref={videoRef} autoPlay muted className="absolute top-0 left-0 w-full h-full object-contain" />
-                        <div ref={overlayRef} className="absolute inset-0 cursor-crosshair" onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}>
-                            <ResizableBox region={localSettings.history} type="history" color="border-red-500" grid={{rows: localSettings.rows, cols: localSettings.cols}} />
-                            {tempRegion && <div className="absolute border-4 border-dashed border-white bg-white bg-opacity-20 z-10" style={getRegionStyle(tempRegion)} />}
-                        </div>
-                    </div>
-                    <div className="flex flex-col justify-center space-y-4">
-                        <div className="p-4 rounded-lg border-2 border-yellow-400 bg-gray-50">
-                            <h4 className="font-bold">Hướng dẫn:</h4>
-                            <p className="text-sm">Vẽ một hình chữ nhật bao quanh toàn bộ bảng lịch sử.</p>
-                             <div className="mt-4 flex gap-2 items-center text-sm">
-                                <label>Lưới:</label>
-                                <input type="number" value={localSettings.rows} onChange={e => setLocalSettings(p => ({...p, rows: parseInt(e.target.value) || 1}))} className="w-full p-1 border rounded" /><span>hàng</span>
-                                <input type="number" value={localSettings.cols} onChange={e => setLocalSettings(p => ({...p, cols: parseInt(e.target.value) || 1}))} className="w-full p-1 border rounded" /><span>cột</span>
-                            </div>
-                        </div>
-                        <div className="mt-4 flex flex-col gap-2">
-                            <button onClick={handleSave} disabled={!localSettings.history} className="w-full px-4 py-2 rounded-lg text-sm text-white bg-teal-500 hover:bg-teal-600 disabled:bg-gray-400">Lưu & Áp dụng</button>
-                            <button onClick={onClose} className="w-full px-4 py-2 rounded-lg text-sm bg-gray-200 hover:bg-gray-300">Hủy</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-// --- VISION ANALYZER COMPONENT ---
-const VisionAnalyzer = ({ onVisionUpdate, results }) => {
-    const videoRef = useRef(null);
-    const canvasRef = useRef(null);
-    const [isCapturing, setIsCapturing] = useState(false);
-    const [stream, setStream] = useState(null);
-    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-    
-    const [settings, setSettings] = useState(() => {
-        try {
-            const saved = localStorage.getItem('visionSettingsChanLe');
-            return saved ? JSON.parse(saved) : { history: null, rows: 3, cols: 5 };
-        } catch { return { history: null, rows: 3, cols: 5 }; }
-    });
-
-    const [debugInfo, setDebugInfo] = useState({ status: 'Đã dừng', lastOutcome: 'N/A' });
-    
-    const recognizeDigitInHistory = (imageData) => {
-        const data = imageData.data;
-        let r = 0, g = 0, b = 0;
-        for (let i = 0; i < data.length; i += 4) {
-            r += data[i]; g += data[i + 1]; b += data[i + 2];
-        }
-        const pixelCount = data.length / 4;
-        r /= pixelCount; g /= pixelCount; b /= pixelCount;
-
-        if (r > 180 && g > 180 && b > 180) return 0; // White
-        if (b > r + 20 && b > g + 20) return 1; // Blue
-        if (g > r + 20 && g > b + 20) return 2; // Green
-        if (r > 150 && g > 120 && b < 100) return 3; // Yellow
-        if (r > 150 && g < 100 && b < 100) return 4; // Red
-        return null;
-    };
-    
-    const toChanLe = (digit) => {
-        if (digit === null) return null;
-        return [0, 2, 4].includes(digit) ? 'Chẵn' : 'Lẻ';
-    };
-
-    const runFullScan = () => {
-        if (!isCapturing || !videoRef.current || videoRef.current.readyState < 2) {
-            alert("Chưa bắt đầu ghi hình hoặc video chưa sẵn sàng.");
-            return;
-        }
-        
-        const video = videoRef.current;
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        canvas.width = video.videoWidth; 
-        canvas.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
-        const h = settings.history;
-        const historyResults = [];
-        const cellPixelWidth = ((h.width / 100) * canvas.width) / settings.cols;
-        const cellPixelHeight = ((h.height / 100) * canvas.height) / settings.rows;
-
-        for (let row = 0; row < settings.rows; row++) {
-            for (let col = 0; col < settings.cols; col++) {
-                const x = (h.x / 100) * canvas.width + col * cellPixelWidth;
-                const y = (h.y / 100) * canvas.height + row * cellPixelHeight;
-                // Scan a smaller area inside the cell to avoid borders
-                const itemImageData = ctx.getImageData(x + cellPixelWidth * 0.1, y + cellPixelHeight * 0.1, cellPixelWidth * 0.8, cellPixelHeight * 0.8);
-                const digit = recognizeDigitInHistory(itemImageData);
-                const outcome = toChanLe(digit);
-                if (outcome !== null) {
-                    historyResults.push({ outcome, redCount: digit });
-                }
-            }
-        }
-        
-        const lastAppHistoryString = results.map(r => r.outcome).join('');
-        const newHistoryString = historyResults.map(r => r.outcome).join('');
-
-        if (newHistoryString && newHistoryString !== lastAppHistoryString) {
-            onVisionUpdate(historyResults);
-            setDebugInfo({ status: 'Đã cập nhật.', lastOutcome: historyResults.length > 0 ? historyResults[historyResults.length - 1].outcome : 'N/A' });
-        } else {
-             setDebugInfo({ status: 'Không có thay đổi.', lastOutcome: 'N/A' });
-        }
-    };
-
-
-    const startCapture = async () => {
-        try {
-            const mediaStream = await navigator.mediaDevices.getDisplayMedia({ video: { cursor: "never" }, audio: false });
-            setStream(mediaStream);
-            if (videoRef.current) videoRef.current.srcObject = mediaStream;
-            setIsCapturing(true);
-            setDebugInfo({ status: 'Đang hoạt động...', lastOutcome: 'N/A' });
-            if (!settings.history) {
-                setIsSettingsOpen(true);
-            }
-        } catch (err) { alert("Không thể bắt đầu ghi hình. Vui lòng cấp quyền."); }
-    };
-
-    const stopCapture = () => {
-        if (stream) stream.getTracks().forEach(track => track.stop());
-        setStream(null); setIsCapturing(false);
-        setDebugInfo({ status: 'Đã dừng', lastOutcome: 'N/A' });
-    };
-
-    const handleSaveSettings = (newSettings) => {
-        setSettings(newSettings);
-        localStorage.setItem('visionSettingsChanLe', JSON.stringify(newSettings));
-    };
-    
-    const getRegionStyle = (region) => {
-        if (!region) return {};
-        return { left: `${region.x}%`, top: `${region.y}%`, width: `${region.width}%`, height: `${region.height}%` };
-    };
-    
-    const getDisplayClass = (outcome) => {
-        if (outcome === 'Chẵn') return 'bg-blue-500 text-white';
-        if (outcome === 'Lẻ') return 'bg-orange-500 text-white';
-        return 'bg-gray-200 text-gray-800';
-    }
+    const buttonStyle = "flex-1 p-4 rounded-lg text-lg font-bold transition-transform transform hover:scale-105";
+    const colors = [
+        "bg-gray-200 text-gray-800", // 0
+        "bg-blue-500 text-white",     // 1
+        "bg-green-500 text-white",    // 2
+        "bg-yellow-500 text-white",   // 3
+        "bg-red-500 text-white"       // 4
+    ];
 
     return (
         <div className="bg-white rounded-xl shadow-lg p-6 border-t-4 border-teal-500">
-            <VisionSettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} onSave={handleSaveSettings} stream={stream} initialSettings={settings} />
-            <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-teal-800">🔬 Phân tích Vision AI</h2>
-                <div className="flex items-center gap-2">
-                    <button onClick={runFullScan} disabled={!isCapturing} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-white bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed" title="Quét thủ công">
-                        <Icon name="MousePointerClick" size={16} />
-                        <span>Quét Lịch sử</span>
+            <h2 className="text-lg font-semibold text-teal-800 mb-4">Nhập Kết quả Lượt mới</h2>
+            <div className="flex gap-4">
+                {[0, 1, 2, 3, 4].map(num => (
+                    <button key={num} onClick={() => handleButtonClick(num)} className={`${buttonStyle} ${colors[num]}`}>
+                        {num}
                     </button>
-                    <button onClick={() => setIsSettingsOpen(true)} disabled={!isCapturing} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-white bg-yellow-500 hover:bg-yellow-600 disabled:opacity-50 disabled:cursor-not-allowed" title="Cài đặt khu vực">
-                        <Icon name="Settings" size={16} />
-                        <span>Cài đặt</span>
-                    </button>
-                    <button onClick={isCapturing ? stopCapture : startCapture} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-white ${isCapturing ? 'bg-red-500 hover:bg-red-600' : 'bg-teal-500 hover:bg-teal-600'}`}>
-                        {isCapturing ? <Icon name="VideoOff" size={16} /> : <Icon name="Video" size={16} />}
-                        {isCapturing ? 'Dừng Ghi' : 'Bắt đầu Ghi'}
-                    </button>
-                </div>
-            </div>
-            <div className="relative bg-gray-900 rounded-lg overflow-hidden w-full" style={{ paddingBottom: '56.25%' }}>
-                <video ref={videoRef} autoPlay muted className="absolute top-0 left-0 w-full h-full object-contain" />
-                <canvas ref={canvasRef} className="hidden" />
-                <div className="absolute inset-0">
-                    {settings.history && <div className="absolute border-2 border-red-500" style={getRegionStyle(settings.history)} />}
-                </div>
-            </div>
-             <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">6 Kết quả Gần nhất</h4>
-                    <div className="bg-gray-100 p-2 rounded-lg">
-                        <div className="grid grid-cols-6 gap-2">
-                            {results.slice(-6).map((result, index) => (
-                                <div key={`${result.flip}-${index}`} className={`flex flex-col items-center justify-center w-full h-12 rounded font-mono font-bold text-lg ${getDisplayClass(result.outcome)}`}>
-                                     <span>{result.outcome === 'Chẵn' ? 'C' : 'L'}</span>
-                                     <span className="text-xs opacity-80">{result.redCount}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-                <div className="bg-gray-100 p-3 rounded-lg text-sm">
-                     <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Bảng Trạng thái AI</h4>
-                     <div className="space-y-1">
-                        <p><strong>Trạng thái:</strong> <span className="font-mono text-blue-600">{debugInfo.status}</span></p>
-                        <p><strong>Kết quả cuối:</strong> <span className="font-mono text-blue-600">{debugInfo.lastOutcome}</span></p>
-                     </div>
-                </div>
+                ))}
             </div>
         </div>
     );
 };
+
+// --- History Display Component ---
+const HistoryDisplay = ({ results }) => {
+    const endOfHistoryRef = useRef(null);
+
+    useEffect(() => {
+        endOfHistoryRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [results]);
+
+    const getOutcomeClass = (outcome) => {
+        if (outcome === 'Chẵn') return 'bg-blue-100 text-blue-800';
+        if (outcome === 'Lẻ') return 'bg-orange-100 text-orange-800';
+        return '';
+    };
+
+    return (
+         <div className="bg-white rounded-xl shadow-lg p-6">
+            <h2 className="text-lg font-semibold text-gray-800 mb-4">Lịch sử Kết quả</h2>
+            <div className="max-h-96 overflow-y-auto pr-2">
+                {results.length > 0 ? (
+                    <table className="w-full text-sm text-left">
+                        <thead className="text-xs text-gray-700 uppercase bg-gray-50 sticky top-0">
+                            <tr>
+                                <th scope="col" className="px-6 py-3">Lần</th>
+                                <th scope="col" className="px-6 py-3">Số Đỏ</th>
+                                <th scope="col" className="px-6 py-3">Kết quả</th>
+                                <th scope="col" className="px-6 py-3">Thời gian</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {results.map((result) => (
+                                <tr key={result.flip} className="bg-white border-b">
+                                    <th scope="row" className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">
+                                        #{result.flip}
+                                    </th>
+                                    <td className="px-6 py-4">{result.redCount}</td>
+                                    <td className="px-6 py-4">
+                                        <span className={`px-2 py-1 font-semibold rounded-full ${getOutcomeClass(result.outcome)}`}>
+                                            {result.outcome}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4">{result.timestamp}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                ) : <div className="text-center text-gray-500 py-8">Chưa có lịch sử.</div>}
+                <div ref={endOfHistoryRef} />
+            </div>
+        </div>
+    );
+};
+
 
 // --- MAIN APP COMPONENT ---
 
@@ -570,13 +323,15 @@ export default function App() {
     }, 500);
   };
 
-  const handleVisionUpdate = (historyResults) => {
+  const handleManualInput = (redCount) => {
+    const toChanLe = (digit) => [0, 2, 4].includes(digit) ? 'Chẵn' : 'Lẻ';
+    const newOutcome = toChanLe(redCount);
+
     const currentFullHistory = results;
     const outcomes = currentFullHistory.map(r => r.outcome);
-    const latestResult = historyResults[historyResults.length - 1];
     
     const newPerformance = { ...modelPerformance };
-    if (outcomes.length > 1 && latestResult) {
+    if (outcomes.length > 1) {
         const modelsToTest = {
             'Tần suất Tổng thể': (data) => {
                 if (data.length === 0) return null;
@@ -626,22 +381,20 @@ export default function App() {
             const predictionBefore = modelsToTest[name](outcomes);
             if (predictionBefore !== null) {
                 if (!newPerformance[name]) newPerformance[name] = [];
-                newPerformance[name].push({ prediction: predictionBefore, correct: predictionBefore === latestResult.outcome });
+                newPerformance[name].push({ prediction: predictionBefore, correct: predictionBefore === newOutcome });
                 if (newPerformance[name].length > 20) newPerformance[name].shift();
             }
         });
         setModelPerformance(newPerformance);
     }
-
-    const newFullResults = historyResults.map((res, index) => ({
-        flip: index + 1,
-        outcome: res.outcome,
-        redCount: res.redCount,
+    
+    setResults(prev => [...prev, {
+        flip: (prev[prev.length - 1]?.flip || 0) + 1,
+        outcome: newOutcome,
+        redCount: redCount,
         timestamp: new Date().toLocaleTimeString(),
-        isFromVision: true,
-        predictionAtFlip: (index === historyResults.length - 1) ? prediction : null
-    }));
-    setResults(newFullResults);
+        predictionAtFlip: prediction
+    }]);
   };
   
   const resetResults = () => {
@@ -685,24 +438,8 @@ export default function App() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
-            <VisionAnalyzer onVisionUpdate={handleVisionUpdate} results={results} />
-             <div className="bg-white rounded-xl shadow-lg p-6">
-                <h2 className="text-lg font-semibold text-gray-800 mb-4">Xu hướng Chẵn / Lẻ</h2>
-                {results.length > 2 ? (
-                <ResponsiveContainer width="100%" height={250}>
-                    <LineChart data={chartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="name" />
-                        <YAxis />
-                        <Tooltip />
-                        <Legend />
-                        <Line type="monotone" dataKey="Chẵn" stroke="#3b82f6" strokeWidth={2} />
-                        <Line type="monotone" dataKey="Lẻ" stroke="#f97316" strokeWidth={2} />
-                        <Line type="monotone" dataKey="Balance" stroke="#82ca9d" strokeDasharray="3 3" name="Cân bằng (Chẵn-Lẻ)" />
-                    </LineChart>
-                </ResponsiveContainer>
-                ) : <div className="text-center text-gray-500 py-16">Chưa đủ dữ liệu để vẽ biểu đồ.</div>}
-            </div>
+            <ManualInput onNewResult={handleManualInput} />
+            <HistoryDisplay results={results} />
           </div>
 
           <div className="lg:col-span-1 space-y-6">
