@@ -258,7 +258,7 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialSettings 
                         </div>
                     </div>
                     <div className="flex flex-col justify-center space-y-4">
-                        <Step title="Bước 1: Vẽ vùng [Kết quả mới]" isComplete={!!localSettings.latest} isActive={setupStep === 'drawingLatest'} onRedraw={() => handleRedraw('latest')} />
+                        <Step title="Bước 1: Vẽ vùng [4 Đồng xu]" isComplete={!!localSettings.latest} isActive={setupStep === 'drawingLatest'} onRedraw={() => handleRedraw('latest')} />
                         <Step title="Bước 2: Vẽ vùng [Lịch sử]" isComplete={!!localSettings.history} isActive={setupStep === 'drawingHistory'} onRedraw={() => handleRedraw('history')}>
                             <div className="mt-2 flex gap-2 items-center text-sm">
                                 <label>Lưới:</label>
@@ -297,24 +297,34 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
     const [debugInfo, setDebugInfo] = useState({ status: 'Đã dừng', lastDigit: 'N/A', lastOutcome: 'N/A' });
     const lastHistoryHash = useRef(null);
 
-    const recognizeDigit = (imageData) => {
+    const recognizeCoinColor = (imageData) => {
         const data = imageData.data;
         let r = 0, g = 0, b = 0;
         for (let i = 0; i < data.length; i += 4) {
-            r += data[i];
-            g += data[i + 1];
-            b += data[i + 2];
+            r += data[i]; g += data[i + 1]; b += data[i + 2];
         }
         const pixelCount = data.length / 4;
-        r /= pixelCount;
-        g /= pixelCount;
-        b /= pixelCount;
+        r /= pixelCount; g /= pixelCount; b /= pixelCount;
 
-        if (r > 180 && g > 180 && b > 180) return 0; // Trắng
-        if (b > r + 20 && b > g + 20) return 1;    // Xanh dương
-        if (g > r + 20 && g > b + 20) return 2;    // Xanh lá
-        if (r > 150 && g > 120 && b < 100) return 3; // Vàng
-        if (r > 150 && g < 100 && b < 100) return 4; // Đỏ
+        if (r > 150 && g < 100 && b < 100) return 'Red';
+        if (r > 180 && g > 180 && b > 180) return 'White';
+        return 'Unknown';
+    }
+
+    const recognizeDigitInHistory = (imageData) => {
+        const data = imageData.data;
+        let r = 0, g = 0, b = 0;
+        for (let i = 0; i < data.length; i += 4) {
+            r += data[i]; g += data[i + 1]; b += data[i + 2];
+        }
+        const pixelCount = data.length / 4;
+        r /= pixelCount; g /= pixelCount; b /= pixelCount;
+
+        if (r > 180 && g > 180 && b > 180) return 0; // White for 0
+        if (b > r + 20 && b > g + 20) return 1;    // Blue for 1
+        if (g > r + 20 && g > b + 20) return 2;    // Green for 2
+        if (r > 150 && g > 120 && b < 100) return 3; // Yellow for 3
+        if (r > 150 && g < 100 && b < 100) return 4; // Red for 4
         return null;
     };
     
@@ -342,11 +352,35 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
         canvas.height = video.videoHeight;
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
+        // Scan latest result by counting coins
         const r = settings.latest;
-        const latestImageData = ctx.getImageData((r.x / 100) * canvas.width, (r.y / 100) * canvas.height, (r.width / 100) * canvas.width, (r.height / 100) * canvas.height);
-        const currentDigit = recognizeDigit(latestImageData);
+        const latestRegionWidth = (r.width / 100) * canvas.width;
+        const latestRegionHeight = (r.height / 100) * canvas.height;
+        const coinWidth = latestRegionWidth / 2;
+        const coinHeight = latestRegionHeight / 2;
+        
+        let redCoinCount = 0;
+        const coinPositions = [
+            {x: 0, y: 0}, {x: coinWidth, y: 0},
+            {x: 0, y: coinHeight}, {x: coinWidth, y: coinHeight}
+        ];
+
+        for (const pos of coinPositions) {
+            const imgData = ctx.getImageData(
+                (r.x / 100) * canvas.width + pos.x,
+                (r.y / 100) * canvas.height + pos.y,
+                coinWidth,
+                coinHeight
+            );
+            if (recognizeCoinColor(imgData) === 'Red') {
+                redCoinCount++;
+            }
+        }
+        
+        const currentDigit = redCoinCount;
         const currentResult = toChanLe(currentDigit);
         
+        // Scan history by recognizing numbers
         const h = settings.history;
         const historyResults = [];
         const cellWidth = ((h.width / 100) * canvas.width) / settings.cols;
@@ -357,7 +391,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                 const x = (h.x / 100) * canvas.width + col * cellWidth;
                 const y = (h.y / 100) * canvas.height + row * cellHeight;
                 const itemImageData = ctx.getImageData(x, y, cellWidth, cellHeight);
-                const digit = recognizeDigit(itemImageData);
+                const digit = recognizeDigitInHistory(itemImageData);
                 const outcome = toChanLe(digit);
                 if (outcome !== null) historyResults.push({outcome, redCount: digit});
             }
