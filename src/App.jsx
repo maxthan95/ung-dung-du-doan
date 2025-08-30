@@ -92,7 +92,7 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialSettings 
     const overlayRef = useRef(null);
     const [setupStep, setSetupStep] = useState('drawingHistory');
     const [tempRegion, setTempRegion] = useState(null);
-    const [localSettings, setLocalSettings] = useState(initialSettings || { history: null, timer: null, cellWidth: 2, cellHeight: 4 });
+    const [localSettings, setLocalSettings] = useState(initialSettings || { history: null, timer: null });
     
     const [action, setAction] = useState({ type: 'none' });
 
@@ -101,7 +101,7 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialSettings 
             videoRef.current.srcObject = stream;
         }
         if (isOpen) {
-            setLocalSettings(initialSettings || { history: null, timer: null, cellWidth: 2, cellHeight: 4 });
+            setLocalSettings(initialSettings || { history: null, timer: null });
             setSetupStep('drawingHistory');
         }
     }, [isOpen, stream, initialSettings]);
@@ -244,13 +244,7 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialSettings 
                         </div>
                     </div>
                     <div className="flex flex-col justify-center space-y-4">
-                        <Step title="Bước 1: Vẽ vùng [Lịch sử]" isComplete={!!localSettings.history} isActive={setupStep === 'drawingHistory'} onRedraw={() => handleRedraw('history')}>
-                            <div className="mt-2 flex gap-2 items-center text-sm">
-                                <label>Kích thước ô (%):</label>
-                                <input type="number" placeholder="Rộng" value={localSettings.cellWidth} onChange={e => setLocalSettings(p => ({...p, cellWidth: parseFloat(e.target.value) || 1}))} className="w-full p-1 border rounded" />
-                                <input type="number" placeholder="Cao" value={localSettings.cellHeight} onChange={e => setLocalSettings(p => ({...p, cellHeight: parseFloat(e.target.value) || 1}))} className="w-full p-1 border rounded" />
-                            </div>
-                        </Step>
+                        <Step title="Bước 1: Vẽ vùng [Lịch sử (Ô đầu tiên)]" isComplete={!!localSettings.history} isActive={setupStep === 'drawingHistory'} onRedraw={() => handleRedraw('history')} />
                         <Step title="Bước 2: Vẽ vùng [Đồng hồ]" isComplete={!!localSettings.timer} isActive={setupStep === 'drawingTimer'} onRedraw={() => handleRedraw('timer')} />
                         <div className="mt-4 flex flex-col gap-2">
                             <button onClick={handleSave} disabled={!localSettings.history || !localSettings.timer} className="w-full px-4 py-2 rounded-lg text-sm text-white bg-teal-500 hover:bg-teal-600 disabled:bg-gray-400">Lưu & Áp dụng</button>
@@ -275,13 +269,12 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
     const [settings, setSettings] = useState(() => {
         try {
             const saved = localStorage.getItem('visionSettingsChanLe');
-            return saved ? JSON.parse(saved) : { history: null, timer: null, cellWidth: 2, cellHeight: 4 };
-        } catch { return { history: null, timer: null, cellWidth: 2, cellHeight: 4 }; }
+            return saved ? JSON.parse(saved) : { history: null, timer: null };
+        } catch { return { history: null, timer: null }; }
     });
 
     const [debugInfo, setDebugInfo] = useState({ status: 'Đã dừng', historyChar: 'N/A' });
-    const lastHistoryHash = useRef(null);
-
+    
     const recognizeHistoryChar = (imageData) => {
         const data = imageData.data;
         let r = 0, g = 0, b = 0;
@@ -295,60 +288,6 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
         if (r > 150 && g < 100 && b < 100) return 'Lẻ';
         return null;
     };
-    
-    const getHistoryHash = (ctx) => {
-        const h = settings.history;
-        if (!h) return null;
-        const imageData = ctx.getImageData((h.x / 100) * ctx.canvas.width, (h.y / 100) * ctx.canvas.height, (h.width / 100) * ctx.canvas.width, (h.height / 100) * ctx.canvas.height);
-        return imageData.data.reduce((a, b) => a + b, 0);
-    };
-
-    const runFullScan = () => {
-        if (!isCapturing || !videoRef.current || videoRef.current.readyState < 2) return;
-        
-        const video = videoRef.current;
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        canvas.width = video.videoWidth; 
-        canvas.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
-        const h = settings.history;
-        const cellPixelWidth = (settings.cellWidth / 100) * canvas.width;
-        const cellPixelHeight = (settings.cellHeight / 100) * canvas.height;
-        const historyPixelWidth = (h.width / 100) * canvas.width;
-        
-        const foundChars = [];
-
-        for (let y = 0; y < (h.height / 100) * canvas.height - cellPixelHeight; y += cellPixelHeight / 2) {
-            for (let x = 0; x < historyPixelWidth - cellPixelWidth; x += cellPixelWidth / 2) {
-                const itemImageData = ctx.getImageData(
-                    (h.x / 100) * canvas.width + x,
-                    (h.y / 100) * canvas.height + y,
-                    cellPixelWidth, cellPixelHeight
-                );
-                const outcome = recognizeHistoryChar(itemImageData);
-                if (outcome) {
-                    const isDuplicate = foundChars.some(c => Math.abs(c.x - x) < cellPixelWidth / 2 && Math.abs(c.y - y) < cellPixelHeight / 2);
-                    if (!isDuplicate) {
-                        foundChars.push({ outcome, x, y });
-                    }
-                }
-            }
-        }
-        
-        foundChars.sort((a, b) => {
-            const colA = Math.floor(a.x / cellPixelWidth);
-            const colB = Math.floor(b.x / cellPixelWidth);
-            if (colA !== colB) return colA - colB;
-            return a.y - b.y;
-        });
-
-        onVisionUpdate(foundChars.map(c => ({ outcome: c.outcome })));
-        lastHistoryHash.current = getHistoryHash(ctx);
-        setDebugInfo({ status: 'Quét xong.', historyChar: foundChars.length > 0 ? foundChars[foundChars.length-1].outcome : 'N/A' });
-    };
-
 
     const startCapture = async () => {
         try {
@@ -406,12 +345,19 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                         break;
 
                     case 'WAITING_FOR_HISTORY_UPDATE':
-                        const currentHistoryHash = getHistoryHash(ctx);
-                        if (lastHistoryHash.current !== null && currentHistoryHash !== lastHistoryHash.current) {
-                           setDebugInfo(prev => ({ ...prev, status: 'Lịch sử đã đổi. Ghi nhận...' }));
-                           runFullScan();
+                        const h = settings.history;
+                        const historyImageData = ctx.getImageData((h.x / 100) * canvas.width, (h.y / 100) * canvas.height, (h.width / 100) * canvas.width, (h.height / 100) * canvas.height);
+                        const newResult = recognizeHistoryChar(historyImageData);
+                        const lastAppResult = results.length > 0 ? results[results.length - 1].outcome : null;
+                        
+                        setDebugInfo(prev => ({ ...prev, historyChar: newResult || 'N/A' }));
+
+                        if (newResult && newResult !== lastAppResult) {
+                           setDebugInfo(prev => ({ ...prev, status: `Lịch sử đã đổi. Ghi nhận: ${newResult}` }));
+                           onVisionUpdate(newResult);
                            setScanState('WAITING_FOR_TIMER_TO_APPEAR');
                         }
+                        
                         if (isTimerVisible) {
                             setScanState('WAITING_FOR_TIMER_TO_DISAPPEAR');
                         }
@@ -646,10 +592,9 @@ export default function App() {
     }, 500);
   };
 
-  const handleVisionUpdate = (historyResults) => {
+  const handleVisionUpdate = (newResult) => {
     const currentFullHistory = results;
     const outcomes = currentFullHistory.map(r => r.outcome);
-    const latestResult = historyResults[historyResults.length - 1];
     
     const newPerformance = { ...modelPerformance };
     if (outcomes.length > 1) {
@@ -702,21 +647,20 @@ export default function App() {
             const predictionBefore = modelsToTest[name](outcomes);
             if (predictionBefore !== null) {
                 if (!newPerformance[name]) newPerformance[name] = [];
-                newPerformance[name].push({ prediction: predictionBefore, correct: predictionBefore === latestResult.outcome });
+                newPerformance[name].push({ prediction: predictionBefore, correct: predictionBefore === newResult });
                 if (newPerformance[name].length > 20) newPerformance[name].shift();
             }
         });
         setModelPerformance(newPerformance);
     }
-
-    const newFullResults = historyResults.map((res, index) => ({
-        flip: index + 1,
-        outcome: res.outcome,
+    
+    setResults(prev => [...prev, {
+        flip: (prev[prev.length - 1]?.flip || 0) + 1,
+        outcome: newResult,
         timestamp: new Date().toLocaleTimeString(),
         isFromVision: true,
-        predictionAtFlip: (index === historyResults.length - 1) ? prediction : null
-    }));
-    setResults(newFullResults);
+        predictionAtFlip: prediction
+    }]);
   };
   
   const resetResults = () => {
