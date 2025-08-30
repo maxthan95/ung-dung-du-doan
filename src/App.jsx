@@ -336,8 +336,10 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                 const currentResult = recognizeOutcome(latestImageData);
 
                 if (currentResult !== null && (lastResult === null || currentResult !== lastResult)) {
-                    setLastResult(currentResult);
-                    if (lastResult !== null) {
+                    // Check if the new result is different from the last known result in the app's state
+                    const lastAppResult = results.length > 0 ? results[results.length - 1].outcome : null;
+                    if(currentResult !== lastAppResult) {
+                        setLastResult(currentResult);
                         const h = settings.history;
                         const historyResults = [];
                         const cellWidth = ((h.width / 100) * canvas.width) / settings.cols;
@@ -358,7 +360,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
             }, 1000);
         }
         return () => clearInterval(intervalId);
-    }, [isCapturing, settings, lastResult, onVisionUpdate]);
+    }, [isCapturing, settings, lastResult, onVisionUpdate, results]);
 
     const getRegionStyle = (region) => {
         if (!region) return {};
@@ -471,7 +473,9 @@ export default function App() {
         'Tần suất Tổng thể': (data) => {
             if (data.length === 0) return null;
             const freq = data.reduce((acc, val) => ({ ...acc, [val]: (acc[val] || 0) + 1 }), {});
-            return Object.keys(freq).reduce((a, b) => freq[a] > freq[b] ? a : b);
+            const keys = Object.keys(freq);
+            if (keys.length === 0) return null;
+            return keys.reduce((a, b) => freq[a] > freq[b] ? a : b);
         },
         'Tần suất Gần đây': (data) => models['Tần suất Tổng thể'](data.slice(-20)),
         'Chuỗi Markov (ngắn)': (data) => {
@@ -483,7 +487,11 @@ export default function App() {
                 transitions[current][next] = (transitions[current][next] || 0) + 1;
             }
             const last = data[data.length - 1];
-            if (transitions[last]) return Object.keys(transitions[last]).reduce((a, b) => transitions[last][a] > transitions[last][b] ? a : b);
+            if (transitions[last]) {
+                 const keys = Object.keys(transitions[last]);
+                 if(keys.length === 0) return null;
+                 return keys.reduce((a, b) => transitions[last][a] > transitions[last][b] ? a : b);
+            }
             return null;
         },
         'Chuỗi Markov (dài)': (data) => {
@@ -495,11 +503,15 @@ export default function App() {
                 transitions[current][next] = (transitions[current][next] || 0) + 1;
             }
             const last = `${data[data.length-2]},${data[data.length-1]}`;
-            if (transitions[last]) return Object.keys(transitions[last]).reduce((a, b) => transitions[last][a] > transitions[last][b] ? a : b);
+            if (transitions[last]) {
+                const keys = Object.keys(transitions[last]);
+                if(keys.length === 0) return null;
+                return keys.reduce((a, b) => transitions[last][a] > transitions[last][b] ? a : b);
+            }
             return null;
         },
-        'Theo Bệt': (data) => data[data.length - 1],
-        'Bẻ Bệt': (data) => data[data.length - 1] === 'Tài' ? 'Xỉu' : 'Tài',
+        'Theo Bệt': (data) => data.length > 0 ? data[data.length - 1] : null,
+        'Bẻ Bệt': (data) => data.length > 0 ? (data[data.length - 1] === 'Tài' ? 'Xỉu' : 'Tài') : null,
       };
 
       const modelWeights = {};
@@ -525,7 +537,7 @@ export default function App() {
           }
       });
       
-      const mostCommon = Object.keys(weightedVotes).reduce((a, b) => weightedVotes[a] > weightedVotes[b] ? a : b, null);
+      const mostCommon = Object.keys(weightedVotes).length > 0 ? Object.keys(weightedVotes).reduce((a, b) => weightedVotes[a] > weightedVotes[b] ? a : b, null) : null;
       
       if (mostCommon !== null) {
         const finalPredictionValue = mostCommon;
@@ -561,12 +573,48 @@ export default function App() {
     const newPerformance = { ...modelPerformance };
     if (outcomes.length > 1) {
         const modelsToTest = {
-            'Tần suất Tổng thể': (data) => data.length > 0 ? Object.keys(data.reduce((acc, val) => ({ ...acc, [val]: (acc[val] || 0) + 1 }), {})).reduce((a, b) => data[a] > data[b] ? a : b) : null,
+            'Tần suất Tổng thể': (data) => {
+                if (data.length === 0) return null;
+                const freq = data.reduce((acc, val) => ({ ...acc, [val]: (acc[val] || 0) + 1 }), {});
+                const keys = Object.keys(freq);
+                if (keys.length === 0) return null;
+                return keys.reduce((a, b) => freq[a] > freq[b] ? a : b);
+            },
             'Tần suất Gần đây': (data) => modelsToTest['Tần suất Tổng thể'](data.slice(-20)),
-            'Chuỗi Markov (ngắn)': (data) => { if (data.length < 2) return null; const t = {}; for (let i = 0; i < data.length - 1; i++) { const c = data[i], n = data[i + 1]; if (!t[c]) t[c] = {}; t[c][n] = (t[c][n] || 0) + 1; } const l = data[data.length - 1]; if (t[l]) return Object.keys(t[l]).reduce((a, b) => t[l][a] > t[l][b] ? a : b); return null; },
-            'Chuỗi Markov (dài)': (data) => { if (data.length < 3) return null; const t = {}; for (let i = 0; i < data.length - 2; i++) { const c = `${data[i]},${data[i+1]}`, n = data[i + 2]; if (!t[c]) t[c] = {}; t[c][n] = (t[c][n] || 0) + 1; } const l = `${data[data.length-2]},${data[data.length-1]}`; if (t[l]) return Object.keys(t[l]).reduce((a, b) => t[l][a] > t[l][b] ? a : b); return null; },
-            'Theo Bệt': (data) => data[data.length-1],
-            'Bẻ Bệt': (data) => data[data.length - 1] === 'Tài' ? 'Xỉu' : 'Tài',
+            'Chuỗi Markov (ngắn)': (data) => { 
+                if (data.length < 2) return null; 
+                const t = {}; 
+                for (let i = 0; i < data.length - 1; i++) { 
+                    const c = data[i], n = data[i + 1]; 
+                    if (!t[c]) t[c] = {}; 
+                    t[c][n] = (t[c][n] || 0) + 1; 
+                } 
+                const l = data[data.length - 1]; 
+                if (t[l]) {
+                    const keys = Object.keys(t[l]);
+                    if (keys.length === 0) return null;
+                    return keys.reduce((a, b) => t[l][a] > t[l][b] ? a : b);
+                } 
+                return null; 
+            },
+            'Chuỗi Markov (dài)': (data) => { 
+                if (data.length < 3) return null; 
+                const t = {}; 
+                for (let i = 0; i < data.length - 2; i++) { 
+                    const c = `${data[i]},${data[i+1]}`, n = data[i + 2]; 
+                    if (!t[c]) t[c] = {}; 
+                    t[c][n] = (t[c][n] || 0) + 1; 
+                } 
+                const l = `${data[data.length-2]},${data[data.length-1]}`; 
+                if (t[l]) {
+                    const keys = Object.keys(t[l]);
+                    if (keys.length === 0) return null;
+                    return keys.reduce((a, b) => t[l][a] > t[l][b] ? a : b);
+                } 
+                return null; 
+            },
+            'Theo Bệt': (data) => data.length > 0 ? data[data.length-1] : null,
+            'Bẻ Bệt': (data) => data.length > 0 ? (data[data.length - 1] === 'Tài' ? 'Xỉu' : 'Tài') : null,
         };
         
         Object.keys(modelsToTest).forEach(name => {
@@ -668,3 +716,4 @@ export default function App() {
     </div>
   );
 }
+
