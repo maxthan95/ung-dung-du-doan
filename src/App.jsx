@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, CheckCircle, RotateCcw, TrendingUp, PlayCircle, PauseCircle } from 'lucide-react';
+import { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, CheckCircle, RotateCcw, TrendingUp, PlayCircle, PauseCircle, Video, VideoOff } from 'lucide-react';
 
 // --- HELPER COMPONENTS ---
 
 const Icon = ({ name, ...props }) => {
-    const icons = { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, CheckCircle, RotateCcw, TrendingUp, PlayCircle, PauseCircle };
+    const icons = { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, CheckCircle, RotateCcw, TrendingUp, PlayCircle, PauseCircle, Video, VideoOff };
     const LucideIcon = icons[name];
     return LucideIcon ? <LucideIcon {...props} /> : null;
 };
@@ -163,6 +163,44 @@ const HistoryDisplay = ({ results }) => {
                     </table>
                 ) : <div className="text-center text-gray-500 py-8">Chưa có lịch sử.</div>}
                 <div ref={endOfHistoryRef} />
+            </div>
+        </div>
+    );
+};
+
+
+// --- Vision Monitor Component (Simplified) ---
+const VisionMonitor = () => {
+    const videoRef = useRef(null);
+    const [isCapturing, setIsCapturing] = useState(false);
+    const [stream, setStream] = useState(null);
+
+    const startCapture = async () => {
+        try {
+            const mediaStream = await navigator.mediaDevices.getDisplayMedia({ video: { cursor: "never" }, audio: false });
+            setStream(mediaStream);
+            if (videoRef.current) videoRef.current.srcObject = mediaStream;
+            setIsCapturing(true);
+        } catch (err) { alert("Không thể bắt đầu ghi hình. Vui lòng cấp quyền."); }
+    };
+
+    const stopCapture = () => {
+        if (stream) stream.getTracks().forEach(track => track.stop());
+        setStream(null); 
+        setIsCapturing(false);
+    };
+
+    return (
+        <div className="bg-white rounded-xl shadow-lg p-6 border-t-4 border-indigo-500">
+            <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-indigo-800">📺 Màn hình Theo dõi</h2>
+                <button onClick={isCapturing ? stopCapture : startCapture} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-white ${isCapturing ? 'bg-red-500 hover:bg-red-600' : 'bg-indigo-500 hover:bg-indigo-600'}`}>
+                    {isCapturing ? <Icon name="VideoOff" size={16} /> : <Icon name="Video" size={16} />}
+                    {isCapturing ? 'Dừng Ghi' : 'Bắt đầu Ghi'}
+                </button>
+            </div>
+            <div className="relative bg-gray-900 rounded-lg overflow-hidden w-full" style={{ paddingBottom: '56.25%' }}>
+                <video ref={videoRef} autoPlay muted className="absolute top-0 left-0 w-full h-full object-contain" />
             </div>
         </div>
     );
@@ -444,17 +482,9 @@ export default function App() {
 
           <div className="lg:col-span-1 space-y-6">
             <AIPredictionDisplay prediction={prediction} analysis={analysis} isAnalyzing={isAnalyzing} isPredictionRunning={isPredictionRunning} onTogglePrediction={() => setIsPredictionRunning(p => !p)} />
+            <VisionMonitor />
             <StatCard iconName="Target" title="Độ chính xác AI" value={`${accuracyStats.accuracy.toFixed(1)}%`} footer={`${accuracyStats.correct}/${accuracyStats.total} đúng`} color="border-green-500" />
             <StatCard iconName="Sigma" title="Tỷ lệ Chẵn / Lẻ" value={`${patterns.ratio?.chan || 0} / ${patterns.ratio?.le || 0}`} footer="Dựa trên toàn bộ lịch sử" color="border-purple-500" />
-            <StatCard iconName="History" title="5 lần gần nhất" value="" color="border-yellow-500">
-                <div className="flex items-center gap-2">
-                    {(patterns.recent && patterns.recent.length > 0 ? patterns.recent : Array(5).fill('-')).map((res, i) => (
-                        <div key={i} className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${res === 'Chẵn' ? 'bg-blue-500 text-white' : res === 'Lẻ' ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-700'}`}>
-                            {res === 'Chẵn' ? 'C' : res === 'Lẻ' ? 'L' : '-'}
-                        </div>
-                    ))}
-                </div>
-            </StatCard>
           </div>
         </div>
       </div>
