@@ -42,7 +42,7 @@ const AIPredictionDisplay = ({ prediction, analysis, isAnalyzing, isPredictionRu
             <div>
                 <div className="text-center mb-6">
                     <p className="text-sm text-gray-500">Dự đoán Tối ưu</p>
-                    <div className={`text-6xl font-bold my-2 ${isChan ? 'text-blue-600' : 'text-red-600'}`}>{prediction.value.toUpperCase()}</div>
+                    <div className={`text-6xl font-bold my-2 ${isChan ? 'text-blue-600' : 'text-orange-500'}`}>{prediction.value.toUpperCase()}</div>
                     <div className="flex items-center justify-center space-x-2 bg-green-100 text-green-700 px-3 py-1 rounded-full w-fit mx-auto">
                         <Icon name="Target" className="w-4 h-4" />
                         <span className="text-sm font-medium">Độ tin cậy: {prediction.confidence}%</span>
@@ -92,7 +92,7 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialSettings 
     const overlayRef = useRef(null);
     const [setupStep, setSetupStep] = useState('drawingHistory');
     const [tempRegion, setTempRegion] = useState(null);
-    const [localSettings, setLocalSettings] = useState(initialSettings || { history: null, timer: null });
+    const [localSettings, setLocalSettings] = useState(initialSettings || { history: null, timer: null, rows: 3, cols: 5 });
     
     const [action, setAction] = useState({ type: 'none' });
 
@@ -101,7 +101,7 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialSettings 
             videoRef.current.srcObject = stream;
         }
         if (isOpen) {
-            setLocalSettings(initialSettings || { history: null, timer: null });
+            setLocalSettings(initialSettings || { history: null, timer: null, rows: 3, cols: 5 });
             setSetupStep('drawingHistory');
         }
     }, [isOpen, stream, initialSettings]);
@@ -198,7 +198,7 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialSettings 
         return { left: `${region.x}%`, top: `${region.y}%`, width: `${region.width}%`, height: `${region.height}%` };
     };
     
-    const ResizableBox = ({ region, type, color }) => {
+    const ResizableBox = ({ region, type, color, grid }) => {
         if (!region) return null;
         const handles = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
         return (
@@ -216,6 +216,13 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialSettings 
                         }}
                     />
                 ))}
+                 {grid && (
+                    <div className="absolute inset-0 grid" style={{gridTemplateColumns: `repeat(${grid.cols}, 1fr)`, gridTemplateRows: `repeat(${grid.rows}, 1fr)`}}>
+                        {Array.from({ length: grid.rows * grid.cols }).map((_, i) => (
+                            <div key={i} className="border border-dashed border-white/30"></div>
+                        ))}
+                    </div>
+                )}
             </div>
         );
     };
@@ -238,13 +245,19 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialSettings 
                     <div className="md:col-span-2 relative bg-gray-900 rounded-lg overflow-hidden w-full" style={{ paddingBottom: '56.25%' }}>
                         <video ref={videoRef} autoPlay muted className="absolute top-0 left-0 w-full h-full object-contain" />
                         <div ref={overlayRef} className="absolute inset-0 cursor-crosshair" onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}>
-                            <ResizableBox region={localSettings.history} type="history" color="border-purple-400" />
+                            <ResizableBox region={localSettings.history} type="history" color="border-red-500" grid={{rows: localSettings.rows, cols: localSettings.cols}} />
                             <ResizableBox region={localSettings.timer} type="timer" color="border-cyan-400" />
                             {tempRegion && <div className="absolute border-4 border-dashed border-white bg-white bg-opacity-20 z-10" style={getRegionStyle(tempRegion)} />}
                         </div>
                     </div>
                     <div className="flex flex-col justify-center space-y-4">
-                        <Step title="Bước 1: Vẽ vùng [Lịch sử (Ô đầu tiên)]" isComplete={!!localSettings.history} isActive={setupStep === 'drawingHistory'} onRedraw={() => handleRedraw('history')} />
+                        <Step title="Bước 1: Vẽ vùng [Lịch sử]" isComplete={!!localSettings.history} isActive={setupStep === 'drawingHistory'} onRedraw={() => handleRedraw('history')}>
+                             <div className="mt-2 flex gap-2 items-center text-sm">
+                                <label>Lưới:</label>
+                                <input type="number" value={localSettings.rows} onChange={e => setLocalSettings(p => ({...p, rows: parseInt(e.target.value) || 1}))} className="w-full p-1 border rounded" /><span>hàng</span>
+                                <input type="number" value={localSettings.cols} onChange={e => setLocalSettings(p => ({...p, cols: parseInt(e.target.value) || 1}))} className="w-full p-1 border rounded" /><span>cột</span>
+                            </div>
+                        </Step>
                         <Step title="Bước 2: Vẽ vùng [Đồng hồ]" isComplete={!!localSettings.timer} isActive={setupStep === 'drawingTimer'} onRedraw={() => handleRedraw('timer')} />
                         <div className="mt-4 flex flex-col gap-2">
                             <button onClick={handleSave} disabled={!localSettings.history || !localSettings.timer} className="w-full px-4 py-2 rounded-lg text-sm text-white bg-teal-500 hover:bg-teal-600 disabled:bg-gray-400">Lưu & Áp dụng</button>
@@ -269,13 +282,14 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
     const [settings, setSettings] = useState(() => {
         try {
             const saved = localStorage.getItem('visionSettingsChanLe');
-            return saved ? JSON.parse(saved) : { history: null, timer: null };
-        } catch { return { history: null, timer: null }; }
+            return saved ? JSON.parse(saved) : { history: null, timer: null, rows: 3, cols: 5 };
+        } catch { return { history: null, timer: null, rows: 3, cols: 5 }; }
     });
 
-    const [debugInfo, setDebugInfo] = useState({ status: 'Đã dừng', historyChar: 'N/A' });
-    
-    const recognizeHistoryChar = (imageData) => {
+    const [debugInfo, setDebugInfo] = useState({ status: 'Đã dừng', lastOutcome: 'N/A' });
+    const lastHistoryHash = useRef(null);
+
+    const recognizeDigitInHistory = (imageData) => {
         const data = imageData.data;
         let r = 0, g = 0, b = 0;
         for (let i = 0; i < data.length; i += 4) {
@@ -284,10 +298,59 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
         const pixelCount = data.length / 4;
         r /= pixelCount; g /= pixelCount; b /= pixelCount;
 
-        if (b > r + 20 && b > g + 20) return 'Chẵn';
-        if (r > 150 && g < 100 && b < 100) return 'Lẻ';
+        if (r > 180 && g > 180 && b > 180) return 0; // White
+        if (b > r + 20 && b > g + 20) return 1; // Blue
+        if (g > r + 20 && g > b + 20) return 2; // Green
+        if (r > 150 && g > 120 && b < 100) return 3; // Yellow
+        if (r > 150 && g < 100 && b < 100) return 4; // Red
         return null;
     };
+    
+    const toChanLe = (digit) => {
+        if (digit === null) return null;
+        return [0, 2, 4].includes(digit) ? 'Chẵn' : 'Lẻ';
+    };
+
+    const getHistoryHash = (ctx) => {
+        const h = settings.history;
+        if (!h) return null;
+        const imageData = ctx.getImageData((h.x / 100) * ctx.canvas.width, (h.y / 100) * ctx.canvas.height, (h.width / 100) * ctx.canvas.width, (h.height / 100) * ctx.canvas.height);
+        return imageData.data.reduce((a, b) => a + b, 0);
+    };
+
+    const runFullScan = () => {
+        if (!isCapturing || !videoRef.current || videoRef.current.readyState < 2) return;
+        
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        canvas.width = video.videoWidth; 
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        const h = settings.history;
+        const historyResults = [];
+        const cellPixelWidth = ((h.width / 100) * canvas.width) / settings.cols;
+        const cellPixelHeight = ((h.height / 100) * canvas.height) / settings.rows;
+
+        for (let row = 0; row < settings.rows; row++) {
+            for (let col = 0; col < settings.cols; col++) {
+                const x = (h.x / 100) * canvas.width + col * cellPixelWidth;
+                const y = (h.y / 100) * canvas.height + row * cellPixelHeight;
+                const itemImageData = ctx.getImageData(x, y, cellPixelWidth, cellPixelHeight);
+                const digit = recognizeDigitInHistory(itemImageData);
+                const outcome = toChanLe(digit);
+                if (outcome !== null) {
+                    historyResults.push({ outcome, redCount: digit });
+                }
+            }
+        }
+
+        onVisionUpdate(historyResults);
+        lastHistoryHash.current = getHistoryHash(ctx);
+        setDebugInfo({ status: 'Quét xong.', lastOutcome: historyResults.length > 0 ? historyResults[historyResults.length - 1].outcome : 'N/A' });
+    };
+
 
     const startCapture = async () => {
         try {
@@ -296,7 +359,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
             if (videoRef.current) videoRef.current.srcObject = mediaStream;
             setIsCapturing(true);
             setScanState('WAITING_FOR_TIMER_TO_DISAPPEAR');
-            setDebugInfo({ status: 'Chờ đồng hồ chạy...', historyChar: 'N/A' });
+            setDebugInfo({ status: 'Chờ đồng hồ chạy...', lastOutcome: 'N/A' });
             if (!settings.history || !settings.timer) {
                 setIsSettingsOpen(true);
             }
@@ -306,7 +369,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
     const stopCapture = () => {
         if (stream) stream.getTracks().forEach(track => track.stop());
         setStream(null); setIsCapturing(false); setScanState('IDLE');
-        setDebugInfo({ status: 'Đã dừng', historyChar: 'N/A' });
+        setDebugInfo({ status: 'Đã dừng', lastOutcome: 'N/A' });
     };
 
     const handleSaveSettings = (newSettings) => {
@@ -345,19 +408,12 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                         break;
 
                     case 'WAITING_FOR_HISTORY_UPDATE':
-                        const h = settings.history;
-                        const historyImageData = ctx.getImageData((h.x / 100) * canvas.width, (h.y / 100) * canvas.height, (h.width / 100) * canvas.width, (h.height / 100) * canvas.height);
-                        const newResult = recognizeHistoryChar(historyImageData);
-                        const lastAppResult = results.length > 0 ? results[results.length - 1].outcome : null;
-                        
-                        setDebugInfo(prev => ({ ...prev, historyChar: newResult || 'N/A' }));
-
-                        if (newResult && newResult !== lastAppResult) {
-                           setDebugInfo(prev => ({ ...prev, status: `Lịch sử đã đổi. Ghi nhận: ${newResult}` }));
-                           onVisionUpdate(newResult);
+                        const currentHistoryHash = getHistoryHash(ctx);
+                        if (lastHistoryHash.current !== null && currentHistoryHash !== lastHistoryHash.current) {
+                           setDebugInfo(prev => ({ ...prev, status: 'Lịch sử đã đổi. Ghi nhận...' }));
+                           runFullScan();
                            setScanState('WAITING_FOR_TIMER_TO_APPEAR');
                         }
-                        
                         if (isTimerVisible) {
                             setScanState('WAITING_FOR_TIMER_TO_DISAPPEAR');
                         }
@@ -385,7 +441,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
     
     const getDisplayClass = (outcome) => {
         if (outcome === 'Chẵn') return 'bg-blue-500 text-white';
-        if (outcome === 'Lẻ') return 'bg-red-600 text-white';
+        if (outcome === 'Lẻ') return 'bg-orange-500 text-white';
         return 'bg-gray-200 text-gray-800';
     }
 
@@ -409,7 +465,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                 <video ref={videoRef} autoPlay muted className="absolute top-0 left-0 w-full h-full object-contain" />
                 <canvas ref={canvasRef} className="hidden" />
                 <div className="absolute inset-0">
-                    {settings.history && <div className="absolute border-2 border-purple-400" style={getRegionStyle(settings.history)} />}
+                    {settings.history && <div className="absolute border-2 border-red-500" style={getRegionStyle(settings.history)} />}
                     {settings.timer && <div className="absolute border-2 border-cyan-400" style={getRegionStyle(settings.timer)} />}
                 </div>
             </div>
@@ -421,6 +477,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                             {results.slice(-6).map((result, index) => (
                                 <div key={`${result.flip}-${index}`} className={`flex flex-col items-center justify-center w-full h-12 rounded font-mono font-bold text-lg ${getDisplayClass(result.outcome)}`}>
                                      <span>{result.outcome === 'Chẵn' ? 'C' : 'L'}</span>
+                                     <span className="text-xs opacity-80">{result.redCount}</span>
                                 </div>
                             ))}
                         </div>
@@ -430,7 +487,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                      <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Bảng Trạng thái AI</h4>
                      <div className="space-y-1">
                         <p><strong>Trạng thái:</strong> <span className="font-mono text-blue-600">{debugInfo.status}</span></p>
-                        <p><strong>Quét Lịch sử:</strong> <span className="font-mono text-blue-600">{debugInfo.historyChar}</span></p>
+                        <p><strong>Quét Lịch sử:</strong> <span className="font-mono text-blue-600">{debugInfo.lastOutcome}</span></p>
                      </div>
                 </div>
             </div>
@@ -592,9 +649,10 @@ export default function App() {
     }, 500);
   };
 
-  const handleVisionUpdate = (newResult) => {
+  const handleVisionUpdate = (historyResults) => {
     const currentFullHistory = results;
     const outcomes = currentFullHistory.map(r => r.outcome);
+    const latestResult = historyResults[historyResults.length - 1];
     
     const newPerformance = { ...modelPerformance };
     if (outcomes.length > 1) {
@@ -647,20 +705,22 @@ export default function App() {
             const predictionBefore = modelsToTest[name](outcomes);
             if (predictionBefore !== null) {
                 if (!newPerformance[name]) newPerformance[name] = [];
-                newPerformance[name].push({ prediction: predictionBefore, correct: predictionBefore === newResult });
+                newPerformance[name].push({ prediction: predictionBefore, correct: predictionBefore === latestResult.outcome });
                 if (newPerformance[name].length > 20) newPerformance[name].shift();
             }
         });
         setModelPerformance(newPerformance);
     }
-    
-    setResults(prev => [...prev, {
-        flip: (prev[prev.length - 1]?.flip || 0) + 1,
-        outcome: newResult,
+
+    const newFullResults = historyResults.map((res, index) => ({
+        flip: index + 1,
+        outcome: res.outcome,
+        redCount: res.redCount,
         timestamp: new Date().toLocaleTimeString(),
         isFromVision: true,
-        predictionAtFlip: prediction
-    }]);
+        predictionAtFlip: (index === historyResults.length - 1) ? prediction : null
+    }));
+    setResults(newFullResults);
   };
   
   const resetResults = () => {
