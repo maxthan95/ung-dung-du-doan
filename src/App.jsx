@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, Video, VideoOff, ScanEye, CheckCircle, XCircle, Grid, RotateCcw, TrendingUp, Settings, MousePointerClick, RefreshCw, PlayCircle, PauseCircle } from 'lucide-react';
+import { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, Video, VideoOff, ScanEye, CheckCircle, XCircle, Grid, RotateCcw, TrendingUp, Settings, MousePointerClick, RefreshCw, PlayCircle, PauseCircle, Timer } from 'lucide-react';
 
 // --- HELPER COMPONENTS ---
 
 const Icon = ({ name, ...props }) => {
-    const icons = { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, Video, VideoOff, ScanEye, CheckCircle, XCircle, Grid, RotateCcw, TrendingUp, Settings, MousePointerClick, RefreshCw, PlayCircle, PauseCircle };
+    const icons = { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, Video, VideoOff, ScanEye, CheckCircle, XCircle, Grid, RotateCcw, TrendingUp, Settings, MousePointerClick, RefreshCw, PlayCircle, PauseCircle, Timer };
     const LucideIcon = icons[name];
     return LucideIcon ? <LucideIcon {...props} /> : null;
 };
@@ -92,7 +92,7 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialSettings 
     const overlayRef = useRef(null);
     const [setupStep, setSetupStep] = useState('drawingLatest');
     const [tempRegion, setTempRegion] = useState(null);
-    const [localSettings, setLocalSettings] = useState(initialSettings || { latest: null, history: null, rows: 3, cols: 5 });
+    const [localSettings, setLocalSettings] = useState(initialSettings || { latest: null, history: null, timer: null, rows: 3, cols: 5 });
     
     const [action, setAction] = useState({ type: 'none' });
 
@@ -101,7 +101,7 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialSettings 
             videoRef.current.srcObject = stream;
         }
         if (isOpen) {
-            setLocalSettings(initialSettings || { latest: null, history: null, rows: 3, cols: 5 });
+            setLocalSettings(initialSettings || { latest: null, history: null, timer: null, rows: 3, cols: 5 });
             setSetupStep('drawingLatest');
         }
     }, [isOpen, stream, initialSettings]);
@@ -120,7 +120,7 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialSettings 
             return;
         }
         
-        for (const type of ['latest', 'history']) {
+        for (const type of ['latest', 'history', 'timer']) {
             const region = localSettings[type];
             if (region && x > region.x && x < region.x + region.width && y > region.y && y < region.y + region.height) {
                 setAction({ type: 'moving', region: type, startX: x, startY: y, initialRegion: region });
@@ -176,6 +176,9 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialSettings 
                 setSetupStep('drawingHistory');
             } else if (setupStep === 'drawingHistory') {
                 setLocalSettings(prev => ({ ...prev, history: tempRegion }));
+                setSetupStep('drawingTimer');
+            } else if (setupStep === 'drawingTimer') {
+                setLocalSettings(prev => ({...prev, timer: tempRegion}));
                 setSetupStep('complete');
             }
         }
@@ -190,7 +193,10 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialSettings 
 
     const handleRedraw = (regionToRedraw) => {
         setLocalSettings(prev => ({ ...prev, [regionToRedraw]: null }));
-        setSetupStep(regionToRedraw === 'latest' ? 'drawingLatest' : 'drawingHistory');
+        setSetupStep(
+            regionToRedraw === 'latest' ? 'drawingLatest' : 
+            regionToRedraw === 'history' ? 'drawingHistory' : 'drawingTimer'
+        );
     };
 
     const getRegionStyle = (region) => {
@@ -227,6 +233,16 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialSettings 
         );
     };
 
+    const Step = ({ title, isComplete, isActive, onRedraw, children }) => (
+        <div className={`p-4 rounded-lg border-2 ${isActive ? 'border-yellow-400' : 'border-gray-200'} ${isComplete ? 'bg-green-50' : 'bg-gray-50'}`}>
+            <div className="flex justify-between items-center">
+                <h4 className="font-bold flex items-center gap-2">{isComplete ? <Icon name="CheckCircle" className="text-green-600" /> : title}</h4>
+                {isComplete && <button onClick={onRedraw} className="p-1 hover:bg-gray-200 rounded"><Icon name="RefreshCw" size={14} /></button>}
+            </div>
+            {children && <div className="mt-2 text-sm">{children}</div>}
+        </div>
+    );
+
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-4xl">
@@ -237,30 +253,22 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialSettings 
                         <div ref={overlayRef} className="absolute inset-0 cursor-crosshair" onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}>
                             <ResizableBox region={localSettings.latest} type="latest" color="border-yellow-400" />
                             <ResizableBox region={localSettings.history} type="history" color="border-purple-400" grid={{rows: localSettings.rows, cols: localSettings.cols}} />
+                            <ResizableBox region={localSettings.timer} type="timer" color="border-cyan-400" />
                             {tempRegion && <div className="absolute border-4 border-dashed border-white bg-white bg-opacity-20 z-10" style={getRegionStyle(tempRegion)} />}
                         </div>
                     </div>
                     <div className="flex flex-col justify-center space-y-4">
-                        <h3 className="font-bold text-gray-700">Hướng dẫn:</h3>
-                        <div className={`p-4 rounded-lg border-2 ${setupStep === 'drawingLatest' ? 'border-yellow-400' : 'border-gray-200'} ${localSettings.latest ? 'bg-green-50' : 'bg-gray-50'}`}>
-                            <div className="flex justify-between items-center">
-                                <h4 className="font-bold flex items-center gap-2">{localSettings.latest ? <Icon name="CheckCircle" className="text-green-600" /> : 'Bước 1:'} Vẽ vùng [Kết quả mới]</h4>
-                                {localSettings.latest && <button onClick={() => handleRedraw('latest')} className="p-1 hover:bg-gray-200 rounded"><Icon name="RefreshCw" size={14} /></button>}
-                            </div>
-                        </div>
-                        <div className={`p-4 rounded-lg border-2 ${setupStep === 'drawingHistory' ? 'border-yellow-400' : 'border-gray-200'} ${localSettings.history ? 'bg-green-50' : 'bg-gray-50'}`}>
-                            <div className="flex justify-between items-center">
-                                <h4 className="font-bold flex items-center gap-2">{localSettings.history ? <Icon name="CheckCircle" className="text-green-600" /> : 'Bước 2:'} Vẽ vùng [Lịch sử]</h4>
-                                {localSettings.history && <button onClick={() => handleRedraw('history')} className="p-1 hover:bg-gray-200 rounded"><Icon name="RefreshCw" size={14} /></button>}
-                            </div>
+                        <Step title="Bước 1: Vẽ vùng [Kết quả mới]" isComplete={!!localSettings.latest} isActive={setupStep === 'drawingLatest'} onRedraw={() => handleRedraw('latest')} />
+                        <Step title="Bước 2: Vẽ vùng [Lịch sử]" isComplete={!!localSettings.history} isActive={setupStep === 'drawingHistory'} onRedraw={() => handleRedraw('history')}>
                             <div className="mt-2 flex gap-2 items-center text-sm">
                                 <label>Lưới:</label>
                                 <input type="number" value={localSettings.rows} onChange={e => setLocalSettings(p => ({...p, rows: parseInt(e.target.value) || 1}))} className="w-full p-1 border rounded" /><span>hàng</span>
                                 <input type="number" value={localSettings.cols} onChange={e => setLocalSettings(p => ({...p, cols: parseInt(e.target.value) || 1}))} className="w-full p-1 border rounded" /><span>cột</span>
                             </div>
-                        </div>
+                        </Step>
+                        <Step title="Bước 3: Vẽ vùng [Đồng hồ]" isComplete={!!localSettings.timer} isActive={setupStep === 'drawingTimer'} onRedraw={() => handleRedraw('timer')} />
                         <div className="mt-4 flex flex-col gap-2">
-                            <button onClick={handleSave} disabled={!localSettings.latest || !localSettings.history} className="w-full px-4 py-2 rounded-lg text-sm text-white bg-teal-500 hover:bg-teal-600 disabled:bg-gray-400">Lưu & Áp dụng</button>
+                            <button onClick={handleSave} disabled={!localSettings.latest || !localSettings.history || !localSettings.timer} className="w-full px-4 py-2 rounded-lg text-sm text-white bg-teal-500 hover:bg-teal-600 disabled:bg-gray-400">Lưu & Áp dụng</button>
                             <button onClick={onClose} className="w-full px-4 py-2 rounded-lg text-sm bg-gray-200 hover:bg-gray-300">Hủy</button>
                         </div>
                     </div>
@@ -281,12 +289,22 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
     const [settings, setSettings] = useState(() => {
         try {
             const saved = localStorage.getItem('visionSettingsChanLe');
-            return saved ? JSON.parse(saved) : { latest: null, history: null, rows: 3, cols: 5 };
-        } catch { return { latest: null, history: null, rows: 3, cols: 5 }; }
+            return saved ? JSON.parse(saved) : { latest: null, history: null, timer: null, rows: 3, cols: 5 };
+        } catch { return { latest: null, history: null, timer: null, rows: 3, cols: 5 }; }
     });
 
-    const [lastResult, setLastResult] = useState(null);
+    const wasTimerRunning = useRef(false);
 
+    const isTimerFinished = (imageData) => {
+        const data = imageData.data; let darkPixels = 0;
+        for (let i = 0; i < data.length; i += 4) {
+            const brightness = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+            if (brightness < 50) darkPixels++;
+        }
+        // If the timer area is mostly dark, assume it's at 0 or finished
+        return (darkPixels / (data.length / 4)) > 0.7; 
+    };
+    
     const recognizeDigit = (imageData) => {
         const data = imageData.data; let r = 0, g = 0, b = 0;
         for (let i = 0; i < data.length; i += 4) { r += data[i]; g += data[i + 1]; b += data[i + 2]; }
@@ -312,7 +330,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
             setStream(mediaStream);
             if (videoRef.current) videoRef.current.srcObject = mediaStream;
             setIsCapturing(true);
-            if (!settings.latest || !settings.history) {
+            if (!settings.latest || !settings.history || !settings.timer) {
                 setIsSettingsOpen(true);
             }
         } catch (err) { alert("Không thể bắt đầu ghi hình. Vui lòng cấp quyền."); }
@@ -320,7 +338,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
 
     const stopCapture = () => {
         if (stream) stream.getTracks().forEach(track => track.stop());
-        setStream(null); setIsCapturing(false); setLastResult(null);
+        setStream(null); setIsCapturing(false); wasTimerRunning.current = false;
     };
 
     const handleSaveSettings = (newSettings) => {
@@ -330,7 +348,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
 
     useEffect(() => {
         let intervalId;
-        if (isCapturing && settings.latest && settings.history) {
+        if (isCapturing && settings.latest && settings.history && settings.timer) {
             const video = videoRef.current;
             const canvas = canvasRef.current;
             const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -340,15 +358,24 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                 canvas.width = video.videoWidth; canvas.height = video.videoHeight;
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-                const r = settings.latest;
-                const latestImageData = ctx.getImageData((r.x / 100) * canvas.width, (r.y / 100) * canvas.height, (r.width / 100) * canvas.width, (r.height / 100) * canvas.height);
-                const currentDigit = recognizeDigit(latestImageData);
-                const currentResult = toChanLe(currentDigit);
+                const t = settings.timer;
+                const timerImageData = ctx.getImageData((t.x / 100) * canvas.width, (t.y / 100) * canvas.height, (t.width / 100) * canvas.width, (t.height / 100) * canvas.height);
+                const timerFinished = isTimerFinished(timerImageData);
 
-                if (currentResult !== null && (lastResult === null || currentResult !== lastResult)) {
+                if (!timerFinished) {
+                    wasTimerRunning.current = true;
+                }
+                
+                if (timerFinished && wasTimerRunning.current) {
+                    wasTimerRunning.current = false; // Trigger only once per cycle
+                    
+                    const r = settings.latest;
+                    const latestImageData = ctx.getImageData((r.x / 100) * canvas.width, (r.y / 100) * canvas.height, (r.width / 100) * canvas.width, (r.height / 100) * canvas.height);
+                    const currentDigit = recognizeDigit(latestImageData);
+                    const currentResult = toChanLe(currentDigit);
+
                     const lastAppResult = results.length > 0 ? results[results.length - 1].outcome : null;
-                    if(currentResult !== lastAppResult) {
-                        setLastResult(currentResult);
+                    if (currentResult !== null && currentResult !== lastAppResult) {
                         const h = settings.history;
                         const historyResults = [];
                         const cellWidth = ((h.width / 100) * canvas.width) / settings.cols;
@@ -367,10 +394,10 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                         onVisionUpdate({outcome: currentResult, redCount: currentDigit}, historyResults);
                     }
                 }
-            }, 1000);
+            }, 500); // Check twice per second
         }
         return () => clearInterval(intervalId);
-    }, [isCapturing, settings, lastResult, onVisionUpdate, results]);
+    }, [isCapturing, settings, onVisionUpdate, results]);
 
     const getRegionStyle = (region) => {
         if (!region) return {};
@@ -405,6 +432,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                 <div className="absolute inset-0">
                     {settings.latest && <div className="absolute border-2 border-yellow-400" style={getRegionStyle(settings.latest)} />}
                     {settings.history && <div className="absolute border-2 border-purple-400" style={getRegionStyle(settings.history)} />}
+                    {settings.timer && <div className="absolute border-2 border-cyan-400" style={getRegionStyle(settings.timer)} />}
                 </div>
             </div>
             <div className="mt-4">
@@ -728,3 +756,4 @@ export default function App() {
     </div>
   );
 }
+
