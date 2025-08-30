@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { Dices, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, Video, VideoOff, ScanEye, CheckCircle, XCircle, List, Grid, RotateCcw, TrendingUp, Settings, MousePointerClick, RefreshCw, PlayCircle, PauseCircle } from 'lucide-react';
+import { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, Video, VideoOff, ScanEye, CheckCircle, XCircle, Grid, RotateCcw, TrendingUp, Settings, MousePointerClick, RefreshCw, PlayCircle, PauseCircle } from 'lucide-react';
 
 // --- HELPER COMPONENTS ---
 
 const Icon = ({ name, ...props }) => {
-    const icons = { Dices, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, Video, VideoOff, ScanEye, CheckCircle, XCircle, List, Grid, RotateCcw, TrendingUp, Settings, MousePointerClick, RefreshCw, PlayCircle, PauseCircle };
+    const icons = { Coins, Target, Sigma, History, PieChart, Link, ArrowRightLeft, Brain, Video, VideoOff, ScanEye, CheckCircle, XCircle, Grid, RotateCcw, TrendingUp, Settings, MousePointerClick, RefreshCw, PlayCircle, PauseCircle };
     const LucideIcon = icons[name];
     return LucideIcon ? <LucideIcon {...props} /> : null;
 };
@@ -37,12 +37,12 @@ const AIPredictionDisplay = ({ prediction, analysis, isAnalyzing, isPredictionRu
             'Chuỗi Markov (ngắn)': 'Link', 'Chuỗi Markov (dài)': 'Link',
             'Theo Bệt': 'TrendingUp', 'Bẻ Bệt': 'ArrowRightLeft',
         };
-        const isTai = prediction.value === 'Tài';
+        const isChan = prediction.value === 'Chẵn';
         content = (
             <div>
                 <div className="text-center mb-6">
                     <p className="text-sm text-gray-500">Dự đoán Tối ưu</p>
-                    <div className={`text-6xl font-bold my-2 ${isTai ? 'text-blue-600' : 'text-red-600'}`}>{prediction.value.toUpperCase()}</div>
+                    <div className={`text-6xl font-bold my-2 ${isChan ? 'text-blue-600' : 'text-orange-500'}`}>{prediction.value.toUpperCase()}</div>
                     <div className="flex items-center justify-center space-x-2 bg-green-100 text-green-700 px-3 py-1 rounded-full w-fit mx-auto">
                         <Icon name="Target" className="w-4 h-4" />
                         <span className="text-sm font-medium">Độ tin cậy: {prediction.confidence}%</span>
@@ -92,7 +92,7 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialSettings 
     const overlayRef = useRef(null);
     const [setupStep, setSetupStep] = useState('drawingLatest');
     const [tempRegion, setTempRegion] = useState(null);
-    const [localSettings, setLocalSettings] = useState(initialSettings || { latest: null, history: null, rows: 10, cols: 10 });
+    const [localSettings, setLocalSettings] = useState(initialSettings || { latest: null, history: null, rows: 3, cols: 5 });
     
     const [action, setAction] = useState({ type: 'none' });
 
@@ -101,7 +101,7 @@ const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialSettings 
             videoRef.current.srcObject = stream;
         }
         if (isOpen) {
-            setLocalSettings(initialSettings || { latest: null, history: null, rows: 10, cols: 10 });
+            setLocalSettings(initialSettings || { latest: null, history: null, rows: 3, cols: 5 });
             setSetupStep('drawingLatest');
         }
     }, [isOpen, stream, initialSettings]);
@@ -280,22 +280,31 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
     
     const [settings, setSettings] = useState(() => {
         try {
-            const saved = localStorage.getItem('visionSettingsTaiXiu');
-            return saved ? JSON.parse(saved) : { latest: null, history: null, rows: 10, cols: 10 };
-        } catch { return { latest: null, history: null, rows: 10, cols: 10 }; }
+            const saved = localStorage.getItem('visionSettingsChanLe');
+            return saved ? JSON.parse(saved) : { latest: null, history: null, rows: 3, cols: 5 };
+        } catch { return { latest: null, history: null, rows: 3, cols: 5 }; }
     });
 
     const [lastResult, setLastResult] = useState(null);
 
-    const recognizeOutcome = (imageData) => {
+    const recognizeDigit = (imageData) => {
         const data = imageData.data; let r = 0, g = 0, b = 0;
         for (let i = 0; i < data.length; i += 4) { r += data[i]; g += data[i + 1]; b += data[i + 2]; }
         const pixelCount = data.length / 4; r /= pixelCount; g /= pixelCount; b /= pixelCount;
         
-        if (b > r && b > g && b > 100) return 'Tài';
-        if (r > b && r > g && r > 100) return 'Xỉu';
+        if (r > 180 && g > 180 && b > 180) return 0; // White for 0
+        if (b > r && b > g && b > 100) return 1;    // Blue for 1
+        if (g > r && g > b && g > 100) return 2;    // Green for 2
+        if (r > 150 && g > 120 && b < 100) return 3; // Yellow for 3
+        if (r > 150 && g < 100 && b < 100) return 4; // Red for 4
         return null;
     };
+    
+    const toChanLe = (digit) => {
+        if (digit === null) return null;
+        return [0, 2, 4].includes(digit) ? 'Chẵn' : 'Lẻ';
+    };
+
 
     const startCapture = async () => {
         try {
@@ -316,7 +325,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
 
     const handleSaveSettings = (newSettings) => {
         setSettings(newSettings);
-        localStorage.setItem('visionSettingsTaiXiu', JSON.stringify(newSettings));
+        localStorage.setItem('visionSettingsChanLe', JSON.stringify(newSettings));
     };
 
     useEffect(() => {
@@ -333,10 +342,10 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
 
                 const r = settings.latest;
                 const latestImageData = ctx.getImageData((r.x / 100) * canvas.width, (r.y / 100) * canvas.height, (r.width / 100) * canvas.width, (r.height / 100) * canvas.height);
-                const currentResult = recognizeOutcome(latestImageData);
+                const currentDigit = recognizeDigit(latestImageData);
+                const currentResult = toChanLe(currentDigit);
 
                 if (currentResult !== null && (lastResult === null || currentResult !== lastResult)) {
-                    // Check if the new result is different from the last known result in the app's state
                     const lastAppResult = results.length > 0 ? results[results.length - 1].outcome : null;
                     if(currentResult !== lastAppResult) {
                         setLastResult(currentResult);
@@ -350,11 +359,12 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                                 const x = (h.x / 100) * canvas.width + col * cellWidth;
                                 const y = (h.y / 100) * canvas.height + row * cellHeight;
                                 const itemImageData = ctx.getImageData(x, y, cellWidth, cellHeight);
-                                const outcome = recognizeOutcome(itemImageData);
-                                if (outcome !== null) historyResults.push(outcome);
+                                const digit = recognizeDigit(itemImageData);
+                                const outcome = toChanLe(digit);
+                                if (outcome !== null) historyResults.push({outcome, redCount: digit});
                             }
                         }
-                        onVisionUpdate(currentResult, historyResults);
+                        onVisionUpdate({outcome: currentResult, redCount: currentDigit}, historyResults);
                     }
                 }
             }, 1000);
@@ -368,8 +378,8 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
     };
     
     const getDisplayClass = (outcome) => {
-        if (outcome === 'Tài') return 'bg-blue-500 text-white';
-        if (outcome === 'Xỉu') return 'bg-red-500 text-white';
+        if (outcome === 'Chẵn') return 'bg-blue-500 text-white';
+        if (outcome === 'Lẻ') return 'bg-orange-500 text-white';
         return 'bg-gray-200 text-gray-800';
     }
 
@@ -402,8 +412,9 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
                 <div className="bg-gray-100 p-2 rounded-lg">
                     <div className="grid grid-cols-6 gap-2">
                         {results.slice(-6).map((result, index) => (
-                            <div key={`${result.flip}-${index}`} className={`flex items-center justify-center w-full h-10 rounded font-mono font-bold text-lg ${getDisplayClass(result.outcome)}`}>
-                                {result.outcome === 'Tài' ? 'T' : 'X'}
+                            <div key={`${result.flip}-${index}`} className={`flex flex-col items-center justify-center w-full h-12 rounded font-mono font-bold text-lg ${getDisplayClass(result.outcome)}`}>
+                                <span>{result.outcome === 'Chẵn' ? 'C' : 'L'}</span>
+                                <span className="text-xs opacity-80">{result.redCount}</span>
                             </div>
                         ))}
                     </div>
@@ -418,7 +429,7 @@ const VisionAnalyzer = ({ onVisionUpdate, results }) => {
 export default function App() {
   const [results, setResults] = useState(() => {
     try {
-      const saved = localStorage.getItem('taiXiuHistory');
+      const saved = localStorage.getItem('chanLeHistory');
       return saved ? JSON.parse(saved) : [];
     } catch { return []; }
   });
@@ -430,7 +441,7 @@ export default function App() {
   
   const [modelPerformance, setModelPerformance] = useState(() => {
     try {
-        const saved = localStorage.getItem('taiXiuModelPerformance');
+        const saved = localStorage.getItem('chanLeModelPerformance');
         return saved ? JSON.parse(saved) : {};
     } catch { return {}; }
   });
@@ -444,16 +455,16 @@ export default function App() {
   }, [results]);
   
   const chartData = useMemo(() => {
-    let taiCount = 0;
-    let xiuCount = 0;
+    let chanCount = 0;
+    let leCount = 0;
     return results.map((r, i) => {
-        if(r.outcome === 'Tài') taiCount++;
-        else xiuCount++;
+        if(r.outcome === 'Chẵn') chanCount++;
+        else leCount++;
         return {
             name: `Lần ${i+1}`,
-            Tài: taiCount,
-            Xỉu: xiuCount,
-            Balance: taiCount - xiuCount
+            Chẵn: chanCount,
+            Lẻ: leCount,
+            Balance: chanCount - leCount
         }
     });
   }, [results]);
@@ -511,7 +522,7 @@ export default function App() {
             return null;
         },
         'Theo Bệt': (data) => data.length > 0 ? data[data.length - 1] : null,
-        'Bẻ Bệt': (data) => data.length > 0 ? (data[data.length - 1] === 'Tài' ? 'Xỉu' : 'Tài') : null,
+        'Bẻ Bệt': (data) => data.length > 0 ? (data[data.length - 1] === 'Chẵn' ? 'Lẻ' : 'Chẵn') : null,
       };
 
       const modelWeights = {};
@@ -559,8 +570,8 @@ export default function App() {
       setPatterns({
         recent: outcomes.slice(-5),
         ratio: {
-            tai: outcomes.filter(o => o === 'Tài').length,
-            xiu: outcomes.filter(o => o === 'Xỉu').length
+            chan: outcomes.filter(o => o === 'Chẵn').length,
+            le: outcomes.filter(o => o === 'Lẻ').length
         }
       });
       setIsAnalyzing(false);
@@ -614,14 +625,14 @@ export default function App() {
                 return null; 
             },
             'Theo Bệt': (data) => data.length > 0 ? data[data.length-1] : null,
-            'Bẻ Bệt': (data) => data.length > 0 ? (data[data.length - 1] === 'Tài' ? 'Xỉu' : 'Tài') : null,
+            'Bẻ Bệt': (data) => data.length > 0 ? (data[data.length - 1] === 'Chẵn' ? 'Lẻ' : 'Chẵn') : null,
         };
         
         Object.keys(modelsToTest).forEach(name => {
             const predictionBefore = modelsToTest[name](outcomes);
             if (predictionBefore !== null) {
                 if (!newPerformance[name]) newPerformance[name] = [];
-                newPerformance[name].push({ prediction: predictionBefore, correct: predictionBefore === latestResult });
+                newPerformance[name].push({ prediction: predictionBefore, correct: predictionBefore === latestResult.outcome });
                 if (newPerformance[name].length > 20) newPerformance[name].shift();
             }
         });
@@ -631,7 +642,8 @@ export default function App() {
     const newHistory = [...historyResults, latestResult];
     const newFullResults = newHistory.map((res, index) => ({
         flip: index + 1,
-        outcome: res,
+        outcome: res.outcome,
+        redCount: res.redCount,
         timestamp: new Date().toLocaleTimeString(),
         isFromVision: true,
         predictionAtFlip: prediction
@@ -642,14 +654,14 @@ export default function App() {
   const resetResults = () => {
     if (window.confirm("Bạn có chắc chắn muốn xóa toàn bộ lịch sử không?")) {
         setResults([]); setPrediction(null); setPatterns({}); setModelPerformance({});
-        localStorage.removeItem('taiXiuHistory');
-        localStorage.removeItem('taiXiuModelPerformance');
+        localStorage.removeItem('chanLeHistory');
+        localStorage.removeItem('chanLeModelPerformance');
     }
   };
 
   useEffect(() => {
-    localStorage.setItem('taiXiuHistory', JSON.stringify(results));
-    localStorage.setItem('taiXiuModelPerformance', JSON.stringify(modelPerformance));
+    localStorage.setItem('chanLeHistory', JSON.stringify(results));
+    localStorage.setItem('chanLeModelPerformance', JSON.stringify(modelPerformance));
     if (isPredictionRunning) {
         analyzeAndPredict(results);
     }
@@ -661,10 +673,10 @@ export default function App() {
         <header className="bg-white rounded-xl shadow-lg p-4 mb-6">
            <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center space-x-3">
-              <Icon name="Dices" className="w-10 h-10 text-blue-600" />
+              <Icon name="Coins" className="w-10 h-10 text-blue-600" />
               <div>
-                <h1 className="text-xl md:text-2xl font-bold text-gray-800">Trợ lý Phân tích Tài Xỉu</h1>
-                <p className="text-xs md:text-sm text-gray-500">Phân tích & Dự đoán kết quả Xúc xắc</p>
+                <h1 className="text-xl md:text-2xl font-bold text-gray-800">Trợ lý Phân tích Chẵn Lẻ</h1>
+                <p className="text-xs md:text-sm text-gray-500">Phân tích & Dự đoán kết quả 4 đồng xu</p>
               </div>
             </div>
             <div className="flex items-center flex-wrap gap-2">
@@ -679,7 +691,7 @@ export default function App() {
           <div className="lg:col-span-2 space-y-6">
             <VisionAnalyzer onVisionUpdate={handleVisionUpdate} results={results} />
              <div className="bg-white rounded-xl shadow-lg p-6">
-                <h2 className="text-lg font-semibold text-gray-800 mb-4">Xu hướng Tài / Xỉu</h2>
+                <h2 className="text-lg font-semibold text-gray-800 mb-4">Xu hướng Chẵn / Lẻ</h2>
                 {results.length > 2 ? (
                 <ResponsiveContainer width="100%" height={250}>
                     <LineChart data={chartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
@@ -688,9 +700,9 @@ export default function App() {
                         <YAxis />
                         <Tooltip />
                         <Legend />
-                        <Line type="monotone" dataKey="Tài" stroke="#3b82f6" strokeWidth={2} />
-                        <Line type="monotone" dataKey="Xỉu" stroke="#ef4444" strokeWidth={2} />
-                        <Line type="monotone" dataKey="Balance" stroke="#82ca9d" strokeDasharray="3 3" name="Cân bằng (Tài-Xỉu)" />
+                        <Line type="monotone" dataKey="Chẵn" stroke="#3b82f6" strokeWidth={2} />
+                        <Line type="monotone" dataKey="Lẻ" stroke="#f97316" strokeWidth={2} />
+                        <Line type="monotone" dataKey="Balance" stroke="#82ca9d" strokeDasharray="3 3" name="Cân bằng (Chẵn-Lẻ)" />
                     </LineChart>
                 </ResponsiveContainer>
                 ) : <div className="text-center text-gray-500 py-16">Chưa đủ dữ liệu để vẽ biểu đồ.</div>}
@@ -700,12 +712,12 @@ export default function App() {
           <div className="lg:col-span-1 space-y-6">
             <AIPredictionDisplay prediction={prediction} analysis={analysis} isAnalyzing={isAnalyzing} isPredictionRunning={isPredictionRunning} onTogglePrediction={() => setIsPredictionRunning(p => !p)} />
             <StatCard iconName="Target" title="Độ chính xác AI" value={`${accuracyStats.accuracy.toFixed(1)}%`} footer={`${accuracyStats.correct}/${accuracyStats.total} đúng`} color="border-green-500" />
-            <StatCard iconName="Sigma" title="Tỷ lệ Tài / Xỉu" value={`${patterns.ratio?.tai || 0} / ${patterns.ratio?.xiu || 0}`} footer="Dựa trên toàn bộ lịch sử" color="border-purple-500" />
+            <StatCard iconName="Sigma" title="Tỷ lệ Chẵn / Lẻ" value={`${patterns.ratio?.chan || 0} / ${patterns.ratio?.le || 0}`} footer="Dựa trên toàn bộ lịch sử" color="border-purple-500" />
             <StatCard iconName="History" title="5 lần gần nhất" value="" color="border-yellow-500">
                 <div className="flex items-center gap-2">
                     {(patterns.recent && patterns.recent.length > 0 ? patterns.recent : Array(5).fill('-')).map((res, i) => (
-                        <div key={i} className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${res === 'Tài' ? 'bg-blue-500 text-white' : res === 'Xỉu' ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-700'}`}>
-                            {res === 'Tài' ? 'T' : res === 'Xỉu' ? 'X' : '-'}
+                        <div key={i} className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${res === 'Chẵn' ? 'bg-blue-500 text-white' : res === 'Lẻ' ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-700'}`}>
+                            {res === 'Chẵn' ? 'C' : res === 'Lẻ' ? 'L' : '-'}
                         </div>
                     ))}
                 </div>
@@ -716,4 +728,3 @@ export default function App() {
     </div>
   );
 }
-
