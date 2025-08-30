@@ -86,7 +86,7 @@ const AIPredictionDisplay = ({ prediction, analysis, isAnalyzing, isPredictionRu
     );
 };
 
-// --- VISION SETTINGS MODAL (WITH GRID SETUP) ---
+// --- VISION SETTINGS MODAL ---
 const VisionSettingsModal = ({ isOpen, onClose, onSave, stream, initialSettings }) => {
     const videoRef = useRef(null);
     const overlayRef = useRef(null);
@@ -819,5 +819,6 @@ export default function App() {
       </div>
     </div>
   );
+}
 }
 
